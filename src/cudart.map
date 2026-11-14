@@ -1,0 +1,10 @@
+/* Version nodes for every exported symbol so versioned references
+ * (e.g. cudaGetDeviceProperties_v2@libcudart.so.13 from torch) resolve.
+ * Add new API names here; the wildcard covers the rest. */
+libcudart.so.13 {
+  global:
+    cuda*;
+    __cuda*;
+  local:
+    *;
+};
