@@ -1,6 +1,7 @@
 #include "cudart_internal.h"
 
 #include <lz4.h>
+#include <zstd.h>
 
 #if defined(_WIN32)
 #include <direct.h>
@@ -123,6 +124,24 @@ static int fatbin_extract_ptx(const unsigned char *data, size_t len,
                         if (looks_like_ptx_text((const char *)dec, (size_t)n)) {
                             *ptx = (char *)dec;
                             *ptx_len = (size_t)n;
+                            return 0;
+                        }
+                    }
+                    free(dec);
+                }
+            } else if (kind == 1 && (flags & 0x8000ull) && !(flags & 0x2000ull) &&
+                       compressed_size > 0 && uncompressed_size > 0 &&
+                       uncompressed_size <= ((uint64_t)256 << 20)) {
+                size_t raw = compressed_size < disk ? compressed_size : disk;
+                unsigned char *dec = malloc((size_t)uncompressed_size + 1);
+                if (dec) {
+                    size_t n = ZSTD_decompress(dec, (size_t)uncompressed_size,
+                                               data + pay, raw);
+                    if (!ZSTD_isError(n) && n == (size_t)uncompressed_size) {
+                        dec[n] = '\0';
+                        if (looks_like_ptx_text((const char *)dec, n)) {
+                            *ptx = (char *)dec;
+                            *ptx_len = n;
                             return 0;
                         }
                     }

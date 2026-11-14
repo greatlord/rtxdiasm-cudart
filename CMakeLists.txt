@@ -41,6 +41,25 @@ else()
   message(FATAL_ERROR "lz4 library target not found in external/lz4 submodule")
 endif()
 
+# --- External: zstd (v1.5.7 submodule) for fatbin ZSTD extraction ---
+set(ZSTD_BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
+set(ZSTD_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+set(ZSTD_BUILD_STATIC ON CACHE BOOL "" FORCE)
+set(ZSTD_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(ZSTD_BUILD_CONTRIB OFF CACHE BOOL "" FORCE)
+if(NOT TARGET libzstd_static AND NOT TARGET libzstd_shared AND NOT TARGET zstd::libzstd_static)
+  add_subdirectory(external/zstd/build/cmake ${CMAKE_BINARY_DIR}/external/zstd EXCLUDE_FROM_ALL)
+endif()
+if(TARGET libzstd_static)
+  set(RTXCUDART_ZSTD_TARGET libzstd_static)
+elseif(TARGET zstd::libzstd_static)
+  set(RTXCUDART_ZSTD_TARGET zstd::libzstd_static)
+elseif(TARGET libzstd_shared)
+  set(RTXCUDART_ZSTD_TARGET libzstd_shared)
+else()
+  message(FATAL_ERROR "zstd library target not found in external/zstd submodule")
+endif()
+
 if(NOT WIN32)
   # Trace hook source may be provided by the integrating build (e.g. acuda driver trace.c).
   if(DEFINED ACUDA_TRACE_SOURCE AND NOT "${ACUDA_TRACE_SOURCE}" STREQUAL "")
@@ -58,9 +77,10 @@ target_include_directories(rtxcudart PUBLIC
 target_include_directories(rtxcudart PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src
   ${CMAKE_CURRENT_SOURCE_DIR}/external/lz4/lib
+  ${CMAKE_CURRENT_SOURCE_DIR}/external/zstd/lib
 )
 
-target_link_libraries(rtxcudart PRIVATE ${RTXCUDART_LZ4_TARGET})
+target_link_libraries(rtxcudart PRIVATE ${RTXCUDART_LZ4_TARGET} ${RTXCUDART_ZSTD_TARGET})
 
 # When built inside ACuda, link the in-tree driver target.
 if(TARGET acuda_driver)
