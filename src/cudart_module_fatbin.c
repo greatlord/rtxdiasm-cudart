@@ -1,5 +1,7 @@
 #include "cudart_internal.h"
 
+#include <lz4.h>
+
 #if defined(_WIN32)
 #include <direct.h>
 #define acuda_mkdir(path) _mkdir(path)
@@ -78,6 +80,9 @@ static int fatbin_extract_ptx(const unsigned char *data, size_t len,
                                        ((uint32_t)e[18] << 16) | ((uint32_t)e[19] << 24);
             uint64_t flags = 0;
             memcpy(&flags, e + 40, 8);
+            uint64_t uncompressed_size = 0;
+            if (eheader_size >= 64)
+                memcpy(&uncompressed_size, e + 56, 8);
             if (eheader_size < 64 || eheader_size > 4096)
                 break;
             size_t pay = pos + eheader_size;
@@ -105,6 +110,24 @@ static int fatbin_extract_ptx(const unsigned char *data, size_t len,
                     return 0;
                 }
                 free(copy);
+            } else if (kind == 1 && (flags & 0x2000ull) && !(flags & 0x8000ull) &&
+                       compressed_size > 0 && uncompressed_size > 0 &&
+                       uncompressed_size <= ((uint64_t)256 << 20)) {
+                size_t raw = compressed_size < disk ? compressed_size : disk;
+                unsigned char *dec = malloc((size_t)uncompressed_size + 1);
+                if (dec) {
+                    int n = LZ4_decompress_safe((const char *)(data + pay), (char *)dec,
+                                                (int)raw, (int)uncompressed_size);
+                    if (n >= 0 && (uint64_t)n == uncompressed_size) {
+                        dec[n] = '\0';
+                        if (looks_like_ptx_text((const char *)dec, (size_t)n)) {
+                            *ptx = (char *)dec;
+                            *ptx_len = (size_t)n;
+                            return 0;
+                        }
+                    }
+                    free(dec);
+                }
             }
             size_t step = eheader_size + disk;
             if (step == 0)
