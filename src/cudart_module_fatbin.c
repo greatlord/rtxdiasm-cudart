@@ -136,11 +136,13 @@ void **__cudaRegisterFatBinary(void *fatCubin) {
         } else {
             char *ptx = NULL;
             size_t ptx_len = 0;
-            for (size_t probe = 512; probe <= 1 << 20; probe *= 2) {
-                if (fatbin_extract_ptx(fatCubin, probe, &ptx, &ptx_len) == 0)
-                    break;
+            if (cudart_cubin_backend() != 2) {
+                for (size_t probe = 512; probe <= 1 << 20; probe *= 2) {
+                    if (fatbin_extract_ptx(fatCubin, probe, &ptx, &ptx_len) == 0)
+                        break;
+                }
             }
-            if (!ptx)
+            if (!ptx && cudart_cubin_backend() != 1)
                 fatbin_lift_ptx(fatCubin, NULL, &ptx, &ptx_len);
             if (ptx) {
                 fb->entries = malloc(sizeof(*fb->entries));
@@ -177,7 +179,7 @@ void __cudaRegisterFunction(void **fatCubinHandle, const char *hostFun,
     if (!fb || !hostFun || !deviceName)
         return;
     size_t entry = 0;
-    if (fb->sass_only && fb->orig_blob) {
+    if (fb->sass_only && fb->orig_blob && cudart_cubin_backend() != 1) {
         char *ptx = NULL;
         size_t ptx_len = 0;
         if (fatbin_lift_ptx(fb->orig_blob, deviceName, &ptx, &ptx_len) == 0) {

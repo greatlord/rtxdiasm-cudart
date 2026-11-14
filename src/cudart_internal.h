@@ -14,6 +14,22 @@ extern "C" {
 
 #define ACUDA_RT_VERSION 13040
 
+/* Cubin/fatbin backend selector, shared with the ACuda driver:
+ *   0 (default) - C fatbin parser first, rtxdisam (C#) SASS lift when the
+ *                 container has no PTX.
+ *   1           - C fatbin parser only; never call the SASS lifter.
+ *   2           - rtxdisam (C#) only; skip the C fatbin parser.
+ * Unset, empty or invalid values mean 0. */
+static inline int cudart_cubin_backend(void) {
+    const char *s = getenv("ACUDA_CUBIN_BACKEND");
+    if (s && *s) {
+        long v = strtol(s, NULL, 0);
+        if (v == 1 || v == 2)
+            return (int)v;
+    }
+    return 0;
+}
+
 extern int g_init;
 extern int g_device;
 extern cudaError_t g_last;
