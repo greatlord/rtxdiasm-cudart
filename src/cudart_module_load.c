@@ -1,5 +1,9 @@
 #include "cudart_internal.h"
-#include "rtxdisam_bridge.h"
+
+/* Provided by ACuda driver bridge (linked via acuda_driver/libcuda). */
+char *acuda_rtxdisam_cubin_to_ptx_for_target(
+    const unsigned char *data, size_t size, const char *entry,
+    const char *target, char *err, size_t errlen);
 
 #if defined(_WIN32)
 #include <direct.h>
