@@ -1,7 +1,6 @@
 #include "cudart_internal.h"
 
-#include <lz4.h>
-#include <zstd.h>
+#include "rtxdiasm_fatbin.h"
 
 #if defined(_WIN32)
 #include <direct.h>
@@ -60,99 +59,11 @@ static int fatbin_extract_ptx(const unsigned char *data, size_t len,
         return -1;
     }
     if (magic == 0xBA55ED50u && len >= 16) {
-        uint16_t version = (uint16_t)data[4] | ((uint16_t)data[5] << 8);
-        uint16_t header_size = (uint16_t)data[6] | ((uint16_t)data[7] << 8);
-        uint64_t fatbin_size = 0;
-        memcpy(&fatbin_size, data + 8, 8);
-        if (version != 1 || header_size < 16)
-            return -1;
-        size_t pos = header_size;
-        size_t end = header_size + (size_t)fatbin_size;
-        if (end < pos || end > len)
-            end = len;
-        while (pos + 64 <= end) {
-            const unsigned char *e = data + pos;
-            uint16_t kind = (uint16_t)e[0] | ((uint16_t)e[1] << 8);
-            uint32_t eheader_size = (uint32_t)e[4] | ((uint32_t)e[5] << 8) |
-                                    ((uint32_t)e[6] << 16) | ((uint32_t)e[7] << 24);
-            uint32_t payload_size = (uint32_t)e[8] | ((uint32_t)e[9] << 8) |
-                                    ((uint32_t)e[10] << 16) | ((uint32_t)e[11] << 24);
-            uint32_t compressed_size = (uint32_t)e[16] | ((uint32_t)e[17] << 8) |
-                                       ((uint32_t)e[18] << 16) | ((uint32_t)e[19] << 24);
-            uint64_t flags = 0;
-            memcpy(&flags, e + 40, 8);
-            uint64_t uncompressed_size = 0;
-            if (eheader_size >= 64)
-                memcpy(&uncompressed_size, e + 56, 8);
-            if (eheader_size < 64 || eheader_size > 4096)
-                break;
-            size_t pay = pos + eheader_size;
-            size_t disk =
-                payload_size > compressed_size ? payload_size : compressed_size;
-            if (pay + disk > end || disk == 0) {
-                pos += eheader_size + (payload_size ? payload_size : disk);
-                if (pos <= pay)
-                    break;
-                continue;
-            }
-            if (kind == 1 && !(flags & (0x2000ull | 0x8000ull)) &&
-                payload_size > 0) {
-                size_t n = payload_size;
-                while (n > 0 && data[pay + n - 1] == 0)
-                    n--;
-                char *copy = malloc(n + 1);
-                if (!copy)
-                    return -1;
-                memcpy(copy, data + pay, n);
-                copy[n] = '\0';
-                if (looks_like_ptx_text(copy, n)) {
-                    *ptx = copy;
-                    *ptx_len = n;
-                    return 0;
-                }
-                free(copy);
-            } else if (kind == 1 && (flags & 0x2000ull) && !(flags & 0x8000ull) &&
-                       compressed_size > 0 && uncompressed_size > 0 &&
-                       uncompressed_size <= ((uint64_t)256 << 20)) {
-                size_t raw = compressed_size < disk ? compressed_size : disk;
-                unsigned char *dec = malloc((size_t)uncompressed_size + 1);
-                if (dec) {
-                    int n = LZ4_decompress_safe((const char *)(data + pay), (char *)dec,
-                                                (int)raw, (int)uncompressed_size);
-                    if (n >= 0 && (uint64_t)n == uncompressed_size) {
-                        dec[n] = '\0';
-                        if (looks_like_ptx_text((const char *)dec, (size_t)n)) {
-                            *ptx = (char *)dec;
-                            *ptx_len = (size_t)n;
-                            return 0;
-                        }
-                    }
-                    free(dec);
-                }
-            } else if (kind == 1 && (flags & 0x8000ull) && !(flags & 0x2000ull) &&
-                       compressed_size > 0 && uncompressed_size > 0 &&
-                       uncompressed_size <= ((uint64_t)256 << 20)) {
-                size_t raw = compressed_size < disk ? compressed_size : disk;
-                unsigned char *dec = malloc((size_t)uncompressed_size + 1);
-                if (dec) {
-                    size_t n = ZSTD_decompress(dec, (size_t)uncompressed_size,
-                                               data + pay, raw);
-                    if (!ZSTD_isError(n) && n == (size_t)uncompressed_size) {
-                        dec[n] = '\0';
-                        if (looks_like_ptx_text((const char *)dec, n)) {
-                            *ptx = (char *)dec;
-                            *ptx_len = n;
-                            return 0;
-                        }
-                    }
-                    free(dec);
-                }
-            }
-            size_t step = eheader_size + disk;
-            if (step == 0)
-                break;
-            pos += step;
-        }
+        /* Shared with acuda via rtxdiasm-fatbin-parse for 100% identical
+         * raw/LZ4/ZSTD PTX extraction from fatbin blobs. */
+        if (rtxdiasm_fatbin_extract_first_ptx(data, len, ptx, ptx_len) ==
+            RTXDIASM_FATBIN_OK)
+            return 0;
         return -1;
     }
     if ((data[0] == 0x01 && data[1] == 0x5A && data[2] == 0xE5 &&

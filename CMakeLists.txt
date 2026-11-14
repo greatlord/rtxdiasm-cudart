@@ -23,41 +23,16 @@ set(RTXCUDART_SOURCES
   src/cudart_texture.c
 )
 
-# --- External: lz4 (v1.11.1 submodule) for fatbin LZ4 extraction ---
-set(LZ4_BUILD_CLI OFF CACHE BOOL "" FORCE)
-set(LZ4_BUILD_LEGACY_LZ4C OFF CACHE BOOL "" FORCE)
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-set(BUILD_STATIC_LIBS ON CACHE BOOL "" FORCE)
-if(NOT TARGET lz4_static AND NOT TARGET lz4 AND NOT TARGET LZ4::lz4_static)
-  add_subdirectory(external/lz4/build/cmake ${CMAKE_BINARY_DIR}/external/lz4 EXCLUDE_FROM_ALL)
-endif()
-if(TARGET lz4_static)
-  set(RTXCUDART_LZ4_TARGET lz4_static)
-elseif(TARGET LZ4::lz4_static)
-  set(RTXCUDART_LZ4_TARGET LZ4::lz4_static)
-elseif(TARGET lz4)
-  set(RTXCUDART_LZ4_TARGET lz4)
-else()
-  message(FATAL_ERROR "lz4 library target not found in external/lz4 submodule")
-endif()
-
-# --- External: zstd (v1.5.7 submodule) for fatbin ZSTD extraction ---
-set(ZSTD_BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
-set(ZSTD_BUILD_SHARED OFF CACHE BOOL "" FORCE)
-set(ZSTD_BUILD_STATIC ON CACHE BOOL "" FORCE)
-set(ZSTD_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(ZSTD_BUILD_CONTRIB OFF CACHE BOOL "" FORCE)
-if(NOT TARGET libzstd_static AND NOT TARGET libzstd_shared AND NOT TARGET zstd::libzstd_static)
-  add_subdirectory(external/zstd/build/cmake ${CMAKE_BINARY_DIR}/external/zstd EXCLUDE_FROM_ALL)
-endif()
-if(TARGET libzstd_static)
-  set(RTXCUDART_ZSTD_TARGET libzstd_static)
-elseif(TARGET zstd::libzstd_static)
-  set(RTXCUDART_ZSTD_TARGET zstd::libzstd_static)
-elseif(TARGET libzstd_shared)
-  set(RTXCUDART_ZSTD_TARGET libzstd_shared)
-else()
-  message(FATAL_ERROR "zstd library target not found in external/zstd submodule")
+# --- Shared fatbin PTX parse/extract (lz4+zstd) ---
+if(NOT TARGET rtxdiasm_fatbin_parse)
+  if(NOT DEFINED RTXDIASM_FATBIN_PARSE_DIR)
+    set(RTXDIASM_FATBIN_PARSE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../rtxdiasm-fatbin-parse")
+  endif()
+  if(EXISTS "${RTXDIASM_FATBIN_PARSE_DIR}/CMakeLists.txt")
+    add_subdirectory("${RTXDIASM_FATBIN_PARSE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/rtxdiasm-fatbin-parse" EXCLUDE_FROM_ALL)
+  else()
+    message(FATAL_ERROR "Missing fatbin parse module at ${RTXDIASM_FATBIN_PARSE_DIR}.")
+  endif()
 endif()
 
 if(NOT WIN32)
@@ -76,11 +51,9 @@ target_include_directories(rtxcudart PUBLIC
 )
 target_include_directories(rtxcudart PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src
-  ${CMAKE_CURRENT_SOURCE_DIR}/external/lz4/lib
-  ${CMAKE_CURRENT_SOURCE_DIR}/external/zstd/lib
 )
 
-target_link_libraries(rtxcudart PRIVATE ${RTXCUDART_LZ4_TARGET} ${RTXCUDART_ZSTD_TARGET})
+target_link_libraries(rtxcudart PRIVATE rtxdiasm_fatbin_parse)
 
 # When built inside ACuda, link the in-tree driver target.
 if(TARGET acuda_driver)
