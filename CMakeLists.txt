@@ -65,7 +65,7 @@ set_target_properties(rtxcudart PROPERTIES
 
 if(NOT WIN32)
   set_target_properties(rtxcudart PROPERTIES
-    VERSION 13.0.96
+    VERSION 13.40
     SOVERSION 13
     BUILD_RPATH "$ORIGIN"
     INSTALL_RPATH "$ORIGIN"

@@ -12,7 +12,7 @@
 extern "C" {
 #endif
 
-#define ACUDA_RT_VERSION 13096
+#define ACUDA_RT_VERSION 13040
 
 extern int g_init;
 extern int g_device;
