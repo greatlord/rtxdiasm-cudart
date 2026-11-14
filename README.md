@@ -1,4 +1,4 @@
-# rtxdiasm_guard
+# rtxdiasm_cudart
 
 Standalone CUDA Runtime API shim (`cudart`) project extracted from ACuda/rtxdisam.
 
