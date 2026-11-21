@@ -642,3 +642,69 @@ cudaError_t cudaHostUnregister(void *ptr) {
         return r;
     return cudaErrorNotSupported;
 }
+
+
+cudaChannelFormatDesc cudaCreateChannelDesc(int x, int y, int z, int w,
+                                            enum cudaChannelFormatKind f) {
+    cudaChannelFormatDesc d;
+    d.x = x; d.y = y; d.z = z; d.w = w; d.f = f;
+    return d;
+}
+
+cudaError_t cudaGetChannelDesc(cudaChannelFormatDesc *desc, cudaArray_t array) {
+    if (!desc) return cudaErrorInvalidValue;
+    memset(desc, 0, sizeof(*desc));
+    if (!array) return cudaErrorInvalidValue;
+    {
+        CUDA_ARRAY_DESCRIPTOR ad;
+        if (cuArrayGetDescriptor(&ad, (CUarray)(void *)array) == CUDA_SUCCESS) {
+            unsigned n = ad.NumChannels; int bits = 32; enum cudaChannelFormatKind f = (enum cudaChannelFormatKind)cudaChannelFormatKindFloat;
+            switch (ad.Format) {
+            case CU_AD_FORMAT_UNSIGNED_INT8: bits=8; f=(enum cudaChannelFormatKind)cudaChannelFormatKindUnsigned; break;
+            case CU_AD_FORMAT_UNSIGNED_INT16: bits=16; f=(enum cudaChannelFormatKind)cudaChannelFormatKindUnsigned; break;
+            case CU_AD_FORMAT_UNSIGNED_INT32: bits=32; f=(enum cudaChannelFormatKind)cudaChannelFormatKindUnsigned; break;
+            case CU_AD_FORMAT_SIGNED_INT8: bits=8; f=(enum cudaChannelFormatKind)cudaChannelFormatKindSigned; break;
+            case CU_AD_FORMAT_SIGNED_INT16: bits=16; f=(enum cudaChannelFormatKind)cudaChannelFormatKindSigned; break;
+            case CU_AD_FORMAT_SIGNED_INT32: bits=32; f=(enum cudaChannelFormatKind)cudaChannelFormatKindSigned; break;
+            case CU_AD_FORMAT_HALF: bits=16; f=(enum cudaChannelFormatKind)cudaChannelFormatKindFloat; break;
+            case CU_AD_FORMAT_FLOAT: bits=32; f=(enum cudaChannelFormatKind)cudaChannelFormatKindFloat; break;
+            default: break;
+            }
+            desc->x = n>=1?bits:0; desc->y = n>=2?bits:0; desc->z = n>=3?bits:0; desc->w = n>=4?bits:0; desc->f = f;
+            return cudaSuccess;
+        }
+    }
+    {
+        CUDA_ARRAY3D_DESCRIPTOR ad3;
+        if (cuArray3DGetDescriptor(&ad3, (CUarray)(void *)array) == CUDA_SUCCESS) {
+            unsigned n = ad3.NumChannels; int bits = 32; enum cudaChannelFormatKind f = (enum cudaChannelFormatKind)cudaChannelFormatKindFloat;
+            switch (ad3.Format) {
+            case CU_AD_FORMAT_UNSIGNED_INT8: bits=8; f=(enum cudaChannelFormatKind)cudaChannelFormatKindUnsigned; break;
+            case CU_AD_FORMAT_UNSIGNED_INT16: bits=16; f=(enum cudaChannelFormatKind)cudaChannelFormatKindUnsigned; break;
+            case CU_AD_FORMAT_UNSIGNED_INT32: bits=32; f=(enum cudaChannelFormatKind)cudaChannelFormatKindUnsigned; break;
+            case CU_AD_FORMAT_SIGNED_INT8: bits=8; f=(enum cudaChannelFormatKind)cudaChannelFormatKindSigned; break;
+            case CU_AD_FORMAT_SIGNED_INT16: bits=16; f=(enum cudaChannelFormatKind)cudaChannelFormatKindSigned; break;
+            case CU_AD_FORMAT_SIGNED_INT32: bits=32; f=(enum cudaChannelFormatKind)cudaChannelFormatKindSigned; break;
+            case CU_AD_FORMAT_HALF: bits=16; f=(enum cudaChannelFormatKind)cudaChannelFormatKindFloat; break;
+            case CU_AD_FORMAT_FLOAT: bits=32; f=(enum cudaChannelFormatKind)cudaChannelFormatKindFloat; break;
+            default: break;
+            }
+            desc->x = n>=1?bits:0; desc->y = n>=2?bits:0; desc->z = n>=3?bits:0; desc->w = n>=4?bits:0; desc->f = f;
+            return cudaSuccess;
+        }
+    }
+    return cudaErrorInvalidValue;
+}
+
+cudaError_t cudaGetTextureObjectResourceViewDesc(struct cudaResourceViewDesc_st *pResViewDesc,
+                                                 cudaTextureObject_t texObject) {
+    if (!pResViewDesc) return cudaErrorInvalidValue;
+    memset(pResViewDesc, 0, sizeof(*pResViewDesc));
+    /* Driver may not store view desc; return empty desc on success if object exists. */
+    {
+        CUDA_RESOURCE_DESC rd;
+        CUresult r = cuTexObjectGetResourceDesc(&rd, (CUtexObject)texObject);
+        if (r != CUDA_SUCCESS) return map_cu(r);
+    }
+    return cudaSuccess;
+}
