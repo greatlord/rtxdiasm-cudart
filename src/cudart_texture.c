@@ -209,9 +209,22 @@ cudaError_t cudaCreateTextureObject(cudaTextureObject_t *pTexObject,
     td.maxAnisotropy = pTexDesc->maxAnisotropy;
     if (pTexDesc->normalizedCoords)
         td.flags |= 0x2;
-    (void)pResViewDesc;
+    CUDA_RESOURCE_VIEW_DESC vd;
+    CUDA_RESOURCE_VIEW_DESC *pvd = NULL;
+    if (pResViewDesc) {
+        memset(&vd, 0, sizeof(vd));
+        vd.format = (CUresourceViewFormat)pResViewDesc->format;
+        vd.width = pResViewDesc->width;
+        vd.height = pResViewDesc->height;
+        vd.depth = pResViewDesc->depth;
+        vd.firstMipmapLevel = pResViewDesc->firstMipmapLevel;
+        vd.lastMipmapLevel = pResViewDesc->lastMipmapLevel;
+        vd.firstLayer = pResViewDesc->firstLayer;
+        vd.lastLayer = pResViewDesc->lastLayer;
+        pvd = &vd;
+    }
     CUtexObject to = 0;
-    CUresult cr = cuTexObjectCreate(&to, &rd, &td, NULL);
+    CUresult cr = cuTexObjectCreate(&to, &rd, &td, pvd);
     if (cr != CUDA_SUCCESS)
         return map_cu(cr);
     *pTexObject = (cudaTextureObject_t)to;
@@ -699,12 +712,18 @@ cudaError_t cudaGetChannelDesc(cudaChannelFormatDesc *desc, cudaArray_t array) {
 cudaError_t cudaGetTextureObjectResourceViewDesc(struct cudaResourceViewDesc_st *pResViewDesc,
                                                  cudaTextureObject_t texObject) {
     if (!pResViewDesc) return cudaErrorInvalidValue;
+    CUDA_RESOURCE_VIEW_DESC vd;
+    memset(&vd, 0, sizeof(vd));
+    CUresult r = cuTexObjectGetResourceViewDesc(&vd, (CUtexObject)texObject);
+    if (r != CUDA_SUCCESS) return map_cu(r);
     memset(pResViewDesc, 0, sizeof(*pResViewDesc));
-    /* Driver may not store view desc; return empty desc on success if object exists. */
-    {
-        CUDA_RESOURCE_DESC rd;
-        CUresult r = cuTexObjectGetResourceDesc(&rd, (CUtexObject)texObject);
-        if (r != CUDA_SUCCESS) return map_cu(r);
-    }
+    pResViewDesc->format = (cudaResourceViewFormat)vd.format;
+    pResViewDesc->width = vd.width;
+    pResViewDesc->height = vd.height;
+    pResViewDesc->depth = vd.depth;
+    pResViewDesc->firstMipmapLevel = vd.firstMipmapLevel;
+    pResViewDesc->lastMipmapLevel = vd.lastMipmapLevel;
+    pResViewDesc->firstLayer = vd.firstLayer;
+    pResViewDesc->lastLayer = vd.lastLayer;
     return cudaSuccess;
 }
