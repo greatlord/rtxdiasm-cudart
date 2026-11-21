@@ -195,6 +195,11 @@ cudaError_t cudaGraphicsMapResources(int count, cudaGraphicsResource_t *resource
     (void)stream;
     cudaError_t r = check_ctx(); if (r != cudaSuccess) return r;
     if (count < 0 || (count > 0 && !resources)) { set_last(cudaErrorInvalidValue); return cudaErrorInvalidValue; }
+    for (int i = 0; i < count; ++i) {
+        if (!resources[i]) { set_last(cudaErrorInvalidHandle); return cudaErrorInvalidHandle; }
+    }
+    if (count == 0) return cudaSuccess;
+    /* No Vulkan/GL/D3D graphics interop backend is wired yet. */
     set_last(cudaErrorNotSupported); return cudaErrorNotSupported;
 }
 cudaError_t cudaGraphicsUnmapResources(int count, cudaGraphicsResource_t *resources, cudaStream_t stream) {
