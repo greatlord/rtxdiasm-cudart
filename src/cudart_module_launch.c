@@ -175,13 +175,23 @@ cudaError_t cudaLaunchHostFunc(cudaStream_t stream, void (*fn)(void *userData),
 }
 
 cudaError_t cudaFuncSetAttribute(const void *func, int attr, int value) {
-    (void)func;
-    (void)attr;
-    (void)value;
     cudaError_t r = check_ctx();
     if (r != cudaSuccess)
         return r;
-    return cudaSuccess;
+    if (!func)
+        return cudaErrorInvalidValue;
+    const char *deviceName = NULL, *ptx = NULL;
+    if (!find_func(func, &deviceName, &ptx) || !deviceName || !ptx)
+        return cudaErrorSymbolNotFound;
+    CUmodule mod = NULL;
+    CUresult cr = module_for(ptx, deviceName, &mod);
+    if (cr != CUDA_SUCCESS)
+        return map_cu(cr);
+    CUfunction fn = NULL;
+    cr = cuModuleGetFunction(&fn, mod, deviceName);
+    if (cr != CUDA_SUCCESS)
+        return map_cu(cr);
+    return map_cu(cuFuncSetAttribute(fn, attr, value));
 }
 
 // CUDA 12.8+ launch stubs push the launch configuration here and pop it
