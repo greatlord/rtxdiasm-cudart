@@ -352,6 +352,42 @@ cudaError_t cudaMemcpy2DToArrayAsync(cudaArray_t dst, size_t wOffset,
                                height, kind);
 }
 
+cudaError_t cudaMemcpyToArray(cudaArray_t dst, size_t wOffset, size_t hOffset,
+                              const void *src, size_t count,
+                              cudaMemcpyKind kind) {
+    return cudaMemcpy2DToArray(dst, wOffset, hOffset, src, count, count, 1, kind);
+}
+
+cudaError_t cudaMemcpyToArrayAsync(cudaArray_t dst, size_t wOffset,
+                                   size_t hOffset, const void *src,
+                                   size_t count, cudaMemcpyKind kind,
+                                   cudaStream_t stream) {
+    (void)stream;
+    return cudaMemcpyToArray(dst, wOffset, hOffset, src, count, kind);
+}
+
+cudaError_t cudaMemcpyFromArray(void *dst, cudaArray_const_t src,
+                                size_t wOffset, size_t hOffset, size_t count,
+                                cudaMemcpyKind kind) {
+    return cudaMemcpy2DFromArray(dst, count, src, wOffset, hOffset, count, 1, kind);
+}
+
+cudaError_t cudaMemcpyFromArrayAsync(void *dst, cudaArray_const_t src,
+                                     size_t wOffset, size_t hOffset,
+                                     size_t count, cudaMemcpyKind kind,
+                                     cudaStream_t stream) {
+    (void)stream;
+    return cudaMemcpyFromArray(dst, src, wOffset, hOffset, count, kind);
+}
+
+cudaError_t cudaMemcpyArrayToArray(cudaArray_t dst, size_t wOffsetDst,
+                                   size_t hOffsetDst, cudaArray_const_t src,
+                                   size_t wOffsetSrc, size_t hOffsetSrc,
+                                   size_t count, cudaMemcpyKind kind) {
+    return cudaMemcpy2DArrayToArray(dst, wOffsetDst, hOffsetDst, src,
+                                    wOffsetSrc, hOffsetSrc, count, 1, kind);
+}
+
 cudaError_t cudaMemcpy2DFromArray(void *dst, size_t dpitch,
                                   cudaArray_const_t src, size_t wOffset,
                                   size_t hOffset, size_t width, size_t height,
@@ -389,6 +425,32 @@ cudaError_t cudaMemcpy2DFromArrayAsync(void *dst, size_t dpitch,
     (void)stream;
     return cudaMemcpy2DFromArray(dst, dpitch, src, wOffset, hOffset, width,
                                  height, kind);
+}
+
+cudaError_t cudaMemcpy2DArrayToArray(cudaArray_t dst, size_t wOffsetDst,
+                                     size_t hOffsetDst, cudaArray_const_t src,
+                                     size_t wOffsetSrc, size_t hOffsetSrc,
+                                     size_t width, size_t height,
+                                     cudaMemcpyKind kind) {
+    (void)kind;
+    cudaError_t r = check_ctx();
+    if (r != cudaSuccess)
+        return r;
+    if (!dst || !src || width == 0)
+        return cudaErrorInvalidValue;
+    CUDA_MEMCPY2D m;
+    memset(&m, 0, sizeof(m));
+    m.srcMemoryType = CU_MEMORYTYPE_ARRAY;
+    m.srcArray = (CUarray)(void *)src;
+    m.srcXInBytes = wOffsetSrc;
+    m.srcY = hOffsetSrc;
+    m.dstMemoryType = CU_MEMORYTYPE_ARRAY;
+    m.dstArray = (CUarray)(void *)dst;
+    m.dstXInBytes = wOffsetDst;
+    m.dstY = hOffsetDst;
+    m.WidthInBytes = width;
+    m.Height = height;
+    return map_cu(cuMemcpy2D(&m));
 }
 
 static void cudart_fill_memcpy3d(CUDA_MEMCPY3D *m,

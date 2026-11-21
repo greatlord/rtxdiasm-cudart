@@ -1,5 +1,11 @@
 #include "cudart_internal.h"
 
+/* Win32 x86: ensure driver host-memory APIs are seen with stdcall. */
+CUresult ACUDA_CUDAAPI cuMemHostAlloc(void **pp, size_t bytesize, unsigned int Flags);
+CUresult ACUDA_CUDAAPI cuMemFreeHost(void *p);
+CUresult ACUDA_CUDAAPI cuMemHostGetDevicePointer(void **pdptr, void *p, unsigned int Flags);
+CUresult ACUDA_CUDAAPI cuMemHostGetFlags(unsigned int *pFlags, void *p);
+
 static struct {
     void *ptr;
     size_t size;
@@ -199,26 +205,40 @@ cudaError_t cudaPointerGetAttributes(struct cudaPointerAttributes *attrs,
 }
 
 cudaError_t cudaHostAlloc(void **ptr, size_t size, unsigned int flags) {
-    (void)flags;
     if (!ptr)
         return cudaErrorInvalidValue;
     *ptr = NULL;
     cudaError_t r = check_ctx();
     if (r != cudaSuccess)
         return r;
-    *ptr = malloc(size ? size : 1);
-    if (!*ptr)
-        return cudaErrorMemoryAllocation;
+    CUresult cr = cuMemHostAlloc(ptr, size, flags);
+    if (cr != CUDA_SUCCESS)
+        return map_cu(cr);
     return cudaSuccess;
 }
 
 cudaError_t cudaFreeHost(void *ptr) {
-    free(ptr);
-    return cudaSuccess;
+    if (!ptr)
+        return cudaSuccess;
+    return map_cu(cuMemFreeHost(ptr));
 }
 
 cudaError_t cudaMallocHost(void **ptr, size_t size) {
     return cudaHostAlloc(ptr, size, 0);
+}
+
+cudaError_t cudaHostGetDevicePointer(void **pDevice, void *pHost, unsigned int flags) {
+    if (!pDevice)
+        return cudaErrorInvalidValue;
+    CUresult r = cuMemHostGetDevicePointer(pDevice, pHost, flags);
+    return map_cu(r);
+}
+
+cudaError_t cudaHostGetFlags(unsigned int *pFlags, void *pHost) {
+    if (!pFlags)
+        return cudaErrorInvalidValue;
+    CUresult r = cuMemHostGetFlags(pFlags, pHost);
+    return map_cu(r);
 }
 
 cudaError_t cudaMallocManaged(void **devPtr, size_t size, unsigned int flags) {
