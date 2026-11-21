@@ -50,6 +50,14 @@ typedef struct {
 } fat_entry_t;
 
 typedef struct {
+    const void *hostVar;
+    char deviceName[256];
+    size_t size;
+    int constant;
+    int global;
+} fat_var_t;
+
+typedef struct {
     fat_entry_t *entries;
     size_t nentries;
     struct {
@@ -58,6 +66,8 @@ typedef struct {
         size_t entry;
     } *funcs;
     size_t nfuncs;
+    fat_var_t *vars;
+    size_t nvars;
     void *orig_blob;
     size_t orig_blob_len;
     int sass_only;
@@ -68,11 +78,13 @@ extern size_t g_nfatbins;
 extern size_t g_fatcap;
 
 int find_func(const void *func, const char **deviceName, const char **ptx);
+int find_var(const void *hostVar, const char **deviceName, size_t *size, fatbin_t **out_fb);
 void fatbins_add(fatbin_t *fb);
 void fatbins_remove(fatbin_t *fb);
 size_t fatbin_add_ptx(fatbin_t *fb, char *ptx, size_t ptx_len);
 int fatbin_lift_ptx(const void *fatCubin, const char *entry, char **ptx, size_t *ptx_len);
 CUresult module_for(const char *ptx, const char *name, CUmodule *out);
+CUresult module_for_fatbin(fatbin_t *fb, CUmodule *out);
 
 #ifdef __cplusplus
 }

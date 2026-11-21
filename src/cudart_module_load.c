@@ -156,3 +156,28 @@ CUresult module_for(const char *ptx, const char *name, CUmodule *out) {
     *out = mod;
     return CUDA_SUCCESS;
 }
+
+CUresult module_for_fatbin(fatbin_t *fb, CUmodule *out) {
+    if (!fb || !out)
+        return CUDA_ERROR_INVALID_VALUE;
+    /* Prefer any existing PTX entry (module contains all symbols). */
+    for (size_t i = 0; i < fb->nentries; i++) {
+        if (fb->entries[i].ptx) {
+            CUresult cr = module_for(fb->entries[i].ptx, "__acuda_fatbin_module__", out);
+            if (cr == CUDA_SUCCESS)
+                return CUDA_SUCCESS;
+        }
+    }
+    /* If no PTX yet (e.g. sass-only/lazy lift), try lifting via first func name if present. */
+    if (fb->sass_only && fb->orig_blob && fb->nfuncs > 0 && cudart_cubin_backend() != 1) {
+        char *ptx = NULL;
+        size_t ptx_len = 0;
+        if (fatbin_lift_ptx(fb->orig_blob, fb->funcs[0].deviceName, &ptx, &ptx_len) == 0) {
+            size_t added = fatbin_add_ptx(fb, ptx, ptx_len);
+            if (added != (size_t)-1 && fb->entries[added].ptx) {
+                return module_for(fb->entries[added].ptx, "__acuda_fatbin_module__", out);
+            }
+        }
+    }
+    return CUDA_ERROR_NOT_FOUND;
+}

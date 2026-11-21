@@ -158,6 +158,8 @@ void **__cudaRegisterFatBinary(void *fatCubin) {
         }
     }
     fb->sass_only = fb->nentries == 0 && fb->orig_blob != NULL;
+    fb->vars = NULL;
+    fb->nvars = 0;
     fatbins_add(fb);
     return (void **)fb;
 }
@@ -202,14 +204,25 @@ void __cudaRegisterFunction(void **fatCubinHandle, const char *hostFun,
 void __cudaRegisterVar(void **fatCubinHandle, char *hostVar,
                        char *deviceAddress, const char *deviceName, int ext,
                        size_t size, int constant, int global) {
-    (void)fatCubinHandle;
-    (void)hostVar;
     (void)deviceAddress;
-    (void)deviceName;
     (void)ext;
-    (void)size;
-    (void)constant;
-    (void)global;
+    fatbin_t *fb = fatbin_of(fatCubinHandle);
+    if (!fb || !hostVar || !deviceName)
+        return;
+    void *nv = realloc(fb->vars, sizeof(*fb->vars) * (fb->nvars + 1));
+    if (!nv)
+        return;
+    fb->vars = nv;
+    fb->vars[fb->nvars].hostVar = (const void *)hostVar;
+    strncpy(fb->vars[fb->nvars].deviceName, deviceName, 255);
+    fb->vars[fb->nvars].deviceName[255] = '\0';
+    fb->vars[fb->nvars].size = size;
+    fb->vars[fb->nvars].constant = constant;
+    fb->vars[fb->nvars].global = global;
+    fb->nvars++;
+    if (getenv("ACUDA_TRACE") || getenv("ACUDA_DEBUG_SYMBOLS"))
+        fprintf(stderr, "ACuda-cudart: RegisterVar host=%p name=%s size=%zu const=%d global=%d\n",
+                (const void *)hostVar, deviceName, size, constant, global);
 }
 
 void __cudaUnregisterFatBinary(void **fatCubinHandle) {
@@ -221,6 +234,7 @@ void __cudaUnregisterFatBinary(void **fatCubinHandle) {
         free(fb->entries[i].ptx);
     free(fb->entries);
     free(fb->funcs);
+    free(fb->vars);
     free(fb);
 }
 
@@ -240,6 +254,20 @@ int find_func(const void *func, const char **deviceName, const char **ptx) {
                     return 1;
                 }
                 return 0;
+            }
+        }
+    }
+    return 0;
+}
+
+int find_var(const void *hostVar, const char **deviceName, size_t *size, fatbin_t **out_fb) {
+    for (size_t i = 0; i < g_nfatbins; i++) {
+        for (size_t v = 0; v < g_fatbins[i]->nvars; v++) {
+            if (g_fatbins[i]->vars[v].hostVar == hostVar) {
+                if (deviceName) *deviceName = g_fatbins[i]->vars[v].deviceName;
+                if (size) *size = g_fatbins[i]->vars[v].size;
+                if (out_fb) *out_fb = g_fatbins[i];
+                return 1;
             }
         }
     }

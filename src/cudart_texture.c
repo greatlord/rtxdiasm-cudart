@@ -1,4 +1,14 @@
 #include "cudart_internal.h"
+#include "acuda/driver.h"
+
+#ifndef ACUDA_CUDAAPI
+#if defined(_WIN32) && defined(_M_IX86)
+#define ACUDA_CUDAAPI __stdcall
+#else
+#define ACUDA_CUDAAPI
+#endif
+#endif
+extern CUresult ACUDA_CUDAAPI cuModuleGetGlobal_v2(CUdeviceptr *dptr, size_t *bytes, CUmodule hmod, const char *name);
 
 static int chan_count(const cudaChannelFormatDesc *d) {
     return (d->x ? 1 : 0) + (d->y ? 1 : 0) + (d->z ? 1 : 0) + (d->w ? 1 : 0);
@@ -475,26 +485,144 @@ cudaError_t cudaMemcpyPeerAsync(void *dst, int dstDevice, const void *src,
     return cudaMemcpy(dst, src, count, cudaMemcpyDeviceToDevice);
 }
 
+static cudaError_t cudart_resolve_symbol(const void *symbol, CUdeviceptr *dptr, size_t *sym_size) {
+    const char *name = NULL;
+    size_t reg_size = 0;
+    fatbin_t *fb = NULL;
+    if (!symbol || !dptr)
+        return cudaErrorInvalidValue;
+    if (!find_var(symbol, &name, &reg_size, &fb) || !name || !fb) {
+        if (getenv("ACUDA_TRACE") || getenv("ACUDA_DEBUG_SYMBOLS"))
+            fprintf(stderr, "ACuda-cudart: resolve_symbol host=%p NOT FOUND\n", symbol);
+        return cudaErrorSymbolNotFound;
+    }
+    CUmodule mod = NULL;
+    CUresult cr = module_for_fatbin(fb, &mod);
+    if (cr != CUDA_SUCCESS) {
+        if (getenv("ACUDA_TRACE") || getenv("ACUDA_DEBUG_SYMBOLS"))
+            fprintf(stderr, "ACuda-cudart: resolve_symbol host=%p name=%s module load failed %d\n", symbol, name, (int)cr);
+        return map_cu(cr);
+    }
+    CUdeviceptr dp = 0;
+    size_t sz = 0;
+    cr = cuModuleGetGlobal_v2(&dp, &sz, mod, name);
+    if (cr != CUDA_SUCCESS) {
+        if (getenv("ACUDA_TRACE") || getenv("ACUDA_DEBUG_SYMBOLS"))
+            fprintf(stderr, "ACuda-cudart: resolve_symbol host=%p name=%s cuModuleGetGlobal failed %d\n", symbol, name, (int)cr);
+        return map_cu(cr);
+    }
+    if (getenv("ACUDA_TRACE") || getenv("ACUDA_DEBUG_SYMBOLS"))
+        fprintf(stderr, "ACuda-cudart: resolve_symbol host=%p name=%s dp=0x%llx sz=%zu\n",
+                symbol, name, (unsigned long long)dp, sz);
+    *dptr = dp;
+    if (sym_size)
+        *sym_size = sz ? sz : reg_size;
+    return cudaSuccess;
+}
+
 cudaError_t cudaMemcpyToSymbol(const void *symbol, const void *src,
                                size_t count, size_t offset, int kind) {
-    (void)symbol;
-    (void)src;
-    (void)count;
-    (void)offset;
-    (void)kind;
     cudaError_t r = check_ctx();
     if (r != cudaSuccess)
         return r;
-    return cudaErrorNotSupported;
+    if (!symbol)
+        return cudaErrorInvalidValue;
+    CUdeviceptr dptr = 0;
+    size_t sym_size = 0;
+    r = cudart_resolve_symbol(symbol, &dptr, &sym_size);
+    if (getenv("ACUDA_TRACE") || getenv("ACUDA_DEBUG_SYMBOLS"))
+        fprintf(stderr, "ACuda-cudart: cudaMemcpyToSymbol host=%p -> dp=0x%llx sym_size=%zu count=%zu off=%zu kind=%d resolve=%d\n",
+                symbol, (unsigned long long)dptr, sym_size, count, offset, kind, (int)r);
+    if (r != cudaSuccess)
+        return r;
+    if (count == 0)
+        count = sym_size > offset ? sym_size - offset : 0;
+    if (offset + count > sym_size)
+        return cudaErrorInvalidValue;
+    if (count == 0)
+        return cudaSuccess;
+    switch ((cudaMemcpyKind)kind) {
+    case cudaMemcpyHostToDevice:
+    case cudaMemcpyDefault:
+        r = map_cu(cuMemcpyHtoD_v2(dptr + (CUdeviceptr)offset, src, count));
+        break;
+    case cudaMemcpyDeviceToDevice:
+        r = map_cu(cuMemcpyDtoD_v2(dptr + (CUdeviceptr)offset,
+                                   (CUdeviceptr)(uintptr_t)src, count));
+        break;
+    default:
+        r = cudaErrorInvalidValue;
+        break;
+    }
+    set_last(r);
+    return r;
+}
+
+cudaError_t cudaMemcpyFromSymbol(void *dst, const void *symbol,
+                                 size_t count, size_t offset, int kind) {
+    cudaError_t r = check_ctx();
+    if (r != cudaSuccess)
+        return r;
+    if (!symbol)
+        return cudaErrorInvalidValue;
+    CUdeviceptr dptr = 0;
+    size_t sym_size = 0;
+    r = cudart_resolve_symbol(symbol, &dptr, &sym_size);
+    if (getenv("ACUDA_TRACE") || getenv("ACUDA_DEBUG_SYMBOLS"))
+        fprintf(stderr, "ACuda-cudart: cudaMemcpyFromSymbol host=%p -> dp=0x%llx sym_size=%zu count=%zu off=%zu kind=%d resolve=%d\n",
+                symbol, (unsigned long long)dptr, sym_size, count, offset, kind, (int)r);
+    if (r != cudaSuccess)
+        return r;
+    if (count == 0)
+        count = sym_size > offset ? sym_size - offset : 0;
+    if (offset + count > sym_size)
+        return cudaErrorInvalidValue;
+    if (count == 0)
+        return cudaSuccess;
+    switch ((cudaMemcpyKind)kind) {
+    case cudaMemcpyDeviceToHost:
+    case cudaMemcpyDefault:
+        r = map_cu(cuMemcpyDtoH_v2(dst, dptr + (CUdeviceptr)offset, count));
+        break;
+    case cudaMemcpyDeviceToDevice:
+        r = map_cu(cuMemcpyDtoD_v2((CUdeviceptr)(uintptr_t)dst,
+                                   dptr + (CUdeviceptr)offset, count));
+        break;
+    default:
+        r = cudaErrorInvalidValue;
+        break;
+    }
+    set_last(r);
+    return r;
 }
 
 cudaError_t cudaGetSymbolAddress(void **devPtr, const void *symbol) {
-    (void)devPtr;
-    (void)symbol;
     cudaError_t r = check_ctx();
     if (r != cudaSuccess)
         return r;
-    return cudaErrorNotSupported;
+    if (!devPtr || !symbol)
+        return cudaErrorInvalidValue;
+    CUdeviceptr dptr = 0;
+    r = cudart_resolve_symbol(symbol, &dptr, NULL);
+    if (r != cudaSuccess)
+        return r;
+    *devPtr = (void *)(uintptr_t)dptr;
+    return cudaSuccess;
+}
+
+cudaError_t cudaGetSymbolSize(size_t *size, const void *symbol) {
+    cudaError_t r = check_ctx();
+    if (r != cudaSuccess)
+        return r;
+    if (!size || !symbol)
+        return cudaErrorInvalidValue;
+    CUdeviceptr dptr = 0;
+    size_t sym_size = 0;
+    r = cudart_resolve_symbol(symbol, &dptr, &sym_size);
+    if (r != cudaSuccess)
+        return r;
+    *size = sym_size;
+    return cudaSuccess;
 }
 
 cudaError_t cudaHostRegister(void *ptr, size_t size, unsigned int flags) {

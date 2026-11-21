@@ -582,7 +582,10 @@ cudaError_t cudaMemcpyPeerAsync(void *dst, int dstDevice, const void *src,
                                 cudaStream_t stream);
 cudaError_t cudaMemcpyToSymbol(const void *symbol, const void *src,
                                size_t count, size_t offset, int kind);
+cudaError_t cudaMemcpyFromSymbol(void *dst, const void *symbol,
+                                 size_t count, size_t offset, int kind);
 cudaError_t cudaGetSymbolAddress(void **devPtr, const void *symbol);
+cudaError_t cudaGetSymbolSize(size_t *size, const void *symbol);
 cudaError_t cudaHostRegister(void *ptr, size_t size, unsigned int flags);
 cudaError_t cudaHostUnregister(void *ptr);
 
