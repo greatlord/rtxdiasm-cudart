@@ -189,43 +189,59 @@ cudaError_t cudaGetDriverEntryPointByVersion(const char *symbol,
 }
 
 
-/* Graphics interop (no Vulkan/GL/D3D interop wired yet) */
+/* Graphics interop */
 typedef struct cudaGraphicsResource_st *cudaGraphicsResource_t;
 cudaError_t cudaGraphicsMapResources(int count, cudaGraphicsResource_t *resources, cudaStream_t stream) {
-    (void)stream;
     cudaError_t r = check_ctx(); if (r != cudaSuccess) return r;
     if (count < 0 || (count > 0 && !resources)) { set_last(cudaErrorInvalidValue); return cudaErrorInvalidValue; }
-    for (int i = 0; i < count; ++i) {
-        if (!resources[i]) { set_last(cudaErrorInvalidHandle); return cudaErrorInvalidHandle; }
-    }
     if (count == 0) return cudaSuccess;
-    /* No Vulkan/GL/D3D graphics interop backend is wired yet. */
-    set_last(cudaErrorNotSupported); return cudaErrorNotSupported;
+    r = map_cu(cuGraphicsMapResources((unsigned int)count, (CUgraphicsResource *)resources, (CUstream)stream));
+    if (r != cudaSuccess) set_last(r);
+    return r;
 }
 cudaError_t cudaGraphicsUnmapResources(int count, cudaGraphicsResource_t *resources, cudaStream_t stream) {
-    (void)stream;
     cudaError_t r = check_ctx(); if (r != cudaSuccess) return r;
     if (count < 0 || (count > 0 && !resources)) { set_last(cudaErrorInvalidValue); return cudaErrorInvalidValue; }
-    set_last(cudaErrorNotSupported); return cudaErrorNotSupported;
+    if (count == 0) return cudaSuccess;
+    r = map_cu(cuGraphicsUnmapResources((unsigned int)count, (CUgraphicsResource *)resources, (CUstream)stream));
+    if (r != cudaSuccess) set_last(r);
+    return r;
 }
 cudaError_t cudaGraphicsResourceGetMappedPointer(void **devPtr, size_t *size, cudaGraphicsResource_t resource) {
     cudaError_t r = check_ctx(); if (r != cudaSuccess) return r;
-    if (!devPtr || !size || !resource) { set_last(cudaErrorInvalidValue); return cudaErrorInvalidValue; }
+    if (!devPtr || !size) { set_last(cudaErrorInvalidValue); return cudaErrorInvalidValue; }
     *devPtr = NULL; *size = 0;
-    set_last(cudaErrorNotSupported); return cudaErrorNotSupported;
+    {
+        CUdeviceptr dptr = 0; size_t sz = 0;
+        CUresult cr = cuGraphicsResourceGetMappedPointer_v2(&dptr, &sz, (CUgraphicsResource)resource);
+        r = map_cu(cr);
+        if (r != cudaSuccess) { set_last(r); return r; }
+        *devPtr = (void *)(uintptr_t)dptr;
+        *size = sz;
+    }
+    return cudaSuccess;
 }
 cudaError_t cudaGraphicsSubResourceGetMappedArray(cudaArray_t *array, cudaGraphicsResource_t resource, unsigned int arrayIndex, unsigned int mipLevel) {
-    (void)arrayIndex; (void)mipLevel;
     cudaError_t r = check_ctx(); if (r != cudaSuccess) return r;
-    if (!array || !resource) { set_last(cudaErrorInvalidValue); return cudaErrorInvalidValue; }
+    if (!array) { set_last(cudaErrorInvalidValue); return cudaErrorInvalidValue; }
     *array = NULL;
-    set_last(cudaErrorNotSupported); return cudaErrorNotSupported;
+    r = map_cu(cuGraphicsSubResourceGetMappedArray((CUarray *)array, (CUgraphicsResource)resource, arrayIndex, mipLevel));
+    if (r != cudaSuccess) set_last(r);
+    return r;
 }
 cudaError_t cudaGraphicsResourceGetMappedMipmappedArray(cudaMipmappedArray_t *mipmappedArray, cudaGraphicsResource_t resource) {
     cudaError_t r = check_ctx(); if (r != cudaSuccess) return r;
-    if (!mipmappedArray || !resource) { set_last(cudaErrorInvalidValue); return cudaErrorInvalidValue; }
+    if (!mipmappedArray) { set_last(cudaErrorInvalidValue); return cudaErrorInvalidValue; }
     *mipmappedArray = NULL;
-    set_last(cudaErrorNotSupported); return cudaErrorNotSupported;
+    r = map_cu(cuGraphicsResourceGetMappedMipmappedArray((CUmipmappedArray *)mipmappedArray, (CUgraphicsResource)resource));
+    if (r != cudaSuccess) set_last(r);
+    return r;
+}
+cudaError_t cudaGraphicsUnregisterResource(cudaGraphicsResource_t resource) {
+    cudaError_t r = check_ctx(); if (r != cudaSuccess) return r;
+    r = map_cu(cuGraphicsUnregisterResource((CUgraphicsResource)resource));
+    if (r != cudaSuccess) set_last(r);
+    return r;
 }
 
 /* CUDA Logs */

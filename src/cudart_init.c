@@ -31,6 +31,8 @@ cudaError_t map_cu(CUresult r) {
     case CUDA_ERROR_INVALID_DEVICE: return cudaErrorInvalidDevice;
     case CUDA_ERROR_INVALID_IMAGE: return cudaErrorInvalidPtx;
     case CUDA_ERROR_INVALID_CONTEXT: return cudaErrorInvalidValue;
+    case CUDA_ERROR_ALREADY_MAPPED: return cudaErrorAlreadyMapped;
+    case CUDA_ERROR_NOT_MAPPED: return cudaErrorNotMapped;
     case CUDA_ERROR_INVALID_HANDLE: return cudaErrorInvalidHandle;
     case CUDA_ERROR_NOT_FOUND: return cudaErrorSymbolNotFound;
     case CUDA_ERROR_NOT_READY: return cudaErrorNotReady;

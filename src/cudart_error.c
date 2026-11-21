@@ -18,6 +18,8 @@ const char *cudaGetErrorString(cudaError_t error) {
     case cudaErrorInitializationError: return "initialization error";
     case cudaErrorNoDevice: return "no CUDA-capable device is detected";
     case cudaErrorInvalidDevice: return "invalid device ordinal";
+    case cudaErrorAlreadyMapped: return "resource already mapped";
+    case cudaErrorNotMapped: return "resource not mapped";
     case cudaErrorInvalidPtx: return "a PTX compilation failed or the PTX is unsupported";
     case cudaErrorInvalidHandle: return "invalid resource handle";
     case cudaErrorSymbolNotFound: return "named symbol not found";
@@ -41,6 +43,8 @@ const char *cudaGetErrorName(cudaError_t error) {
     case cudaErrorInitializationError: return "cudaErrorInitializationError";
     case cudaErrorNoDevice: return "cudaErrorNoDevice";
     case cudaErrorInvalidDevice: return "cudaErrorInvalidDevice";
+    case cudaErrorAlreadyMapped: return "cudaErrorAlreadyMapped";
+    case cudaErrorNotMapped: return "cudaErrorNotMapped";
     case cudaErrorInvalidPtx: return "cudaErrorInvalidPtx";
     case cudaErrorInvalidHandle: return "cudaErrorInvalidHandle";
     case cudaErrorSymbolNotFound: return "cudaErrorSymbolNotFound";
