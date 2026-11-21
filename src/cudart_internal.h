@@ -12,7 +12,7 @@
 extern "C" {
 #endif
 
-#define ACUDA_RT_VERSION 13040
+#define ACUDA_RT_VERSION 13050
 
 /* Cubin/fatbin backend selector, shared with the ACuda driver:
  *   0 (default) - C fatbin parser first, rtxdisam (C#) SASS lift when the
