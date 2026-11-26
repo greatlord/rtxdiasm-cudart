@@ -1,4 +1,4 @@
-#include "cudart_internal.h"
+﻿#include "cudart_internal.h"
 #include "acuda/driver.h"
 
 #ifndef ACUDA_CUDAAPI
@@ -667,7 +667,7 @@ cudaError_t cudart_memcpy_to_symbol_async(const void *symbol, const void *src,
     case cudaMemcpyHostToDevice:
     case cudaMemcpyDefault:
         r = map_cu(cuMemcpyHtoDAsync_v2(dptr + (CUdeviceptr)offset, src, count,
-                                        (void *)stream));
+                                        map_stream(stream)));
         break;
     case cudaMemcpyDeviceToDevice:
         /* Ordered copy: PhysX fills the source from a preceding kernel in the

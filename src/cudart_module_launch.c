@@ -1,4 +1,4 @@
-#include "cudart_internal.h"
+﻿#include "cudart_internal.h"
 
 #include <time.h>
 
@@ -76,8 +76,7 @@ cudaError_t cudaLaunchKernel(const void *func, dim3 gridDim, dim3 blockDim,
     }
     cr = cuLaunchKernel(fn, gridDim.x, gridDim.y, gridDim.z,
                         blockDim.x, blockDim.y, blockDim.z, sharedMem,
-                        (CUstream)(stream == cudaStreamPerThread ? NULL
-                                                                  : stream),
+                        map_stream(stream),
                         args, NULL);
     r = map_cu(cr);
     set_last(r);
@@ -162,7 +161,7 @@ cudaError_t cudaLaunchHostFunc(cudaStream_t stream, void (*fn)(void *userData),
     cudaError_t r = check_ctx();
     if (r != cudaSuccess)
         return r;
-    if (stream && stream != cudaStreamPerThread) {
+    if ((uintptr_t)stream > 2) {
         r = cudaStreamSynchronize(stream);
         if (r != cudaSuccess)
             return r;

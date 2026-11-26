@@ -54,8 +54,13 @@ cudaError_t cudart_memcpy_to_symbol_async(const void *symbol, const void *src,
 cudaError_t ensure_init(void);
 cudaError_t check_ctx(void);
 static inline CUstream map_stream(cudaStream_t s) {
-    if (!s || s == cudaStreamPerThread)
+    uintptr_t v = (uintptr_t)s;
+    /* CUDA pseudo-handles: 0 default, 1 legacy default, 2 per-thread.
+     * All three mean the default stream; PhysX (built against NVIDIA's
+     * headers) passes cudaStreamLegacy == 1. */
+    if (v <= 2) {
         return NULL;
+    }
     return (CUstream)s;
 }
 

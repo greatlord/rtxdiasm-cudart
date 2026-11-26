@@ -1,4 +1,4 @@
-// ACuda CUDA Runtime API compatibility (libcudart.so). C ABI.
+﻿// ACuda CUDA Runtime API compatibility (libcudart.so). C ABI.
 //
 // Layout-critical types (cudaDeviceProp, cudaFuncAttributes, enums) match
 // the CUDA 12 headers field-for-field; verified against the
@@ -95,7 +95,7 @@ typedef enum cudaStreamCaptureStatus_enum {
 typedef void (*cudaStreamCallback_t)(cudaStream_t stream, int status,
                                      void *userData);
 
-#define cudaStreamLegacy ((cudaStream_t)0)
+#define cudaStreamLegacy ((cudaStream_t)0x1)
 #define cudaStreamPerThread ((cudaStream_t)0x2)
 #define cudaStreamDefault ((cudaStream_t)0)
 #define cudaStreamNonBlocking 0x01
