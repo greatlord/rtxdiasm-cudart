@@ -670,9 +670,12 @@ cudaError_t cudart_memcpy_to_symbol_async(const void *symbol, const void *src,
                                         (void *)stream));
         break;
     case cudaMemcpyDeviceToDevice:
-        r = map_cu(cuMemcpyDtoDAsync_v2(dptr + (CUdeviceptr)offset,
-                                        (CUdeviceptr)(uintptr_t)src, count,
-                                        (void *)stream));
+        /* Ordered copy: PhysX fills the source from a preceding kernel in the
+         * same stream, so the block must be complete before this memmove.  The
+         * stream timeline deadlock that forced the async path is fixed by the
+         * single-context change. */
+        r = map_cu(cuMemcpyDtoD_v2(dptr + (CUdeviceptr)offset,
+                                   (CUdeviceptr)(uintptr_t)src, count));
         break;
     default:
         r = cudaErrorInvalidValue;

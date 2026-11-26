@@ -31,8 +31,9 @@ cudaError_t cudaLaunchKernel(const void *func, dim3 gridDim, dim3 blockDim,
         set_last(cudaErrorInvalidValue);
         return cudaErrorInvalidValue;
     }
-    const char *deviceName = NULL, *ptx = NULL;
-    if (!find_func(func, &deviceName, &ptx) || !deviceName || !ptx) {
+    const char *deviceName = NULL;
+    fatbin_t *fb = NULL;
+    if (!find_func_fb(func, &deviceName, &fb) || !deviceName || !fb) {
         const char *dump_dir = ACUDA_DEFAULT_DUMP_DIR;
         acuda_mkdir(dump_dir);
         for (size_t i = 0; i < g_nfatbins; i++) {
@@ -60,7 +61,7 @@ cudaError_t cudaLaunchKernel(const void *func, dim3 gridDim, dim3 blockDim,
         return cudaErrorSymbolNotFound;
     }
     CUmodule mod = NULL;
-    CUresult cr = module_for(ptx, deviceName, &mod);
+    CUresult cr = module_for_fatbin(fb, &mod);
     if (cr != CUDA_SUCCESS) {
         r = map_cu(cr);
         set_last(r);
@@ -92,8 +93,8 @@ cudaError_t cudaFuncGetAttributes(struct cudaFuncAttributes *attr,
         return r;
     if (!func)
         return cudaErrorInvalidValue;
-    const char *deviceName = NULL, *ptx = NULL;
-    if (!find_func(func, &deviceName, &ptx))
+    const char *deviceName = NULL;
+    if (!find_func_fb(func, &deviceName, NULL) || !deviceName)
         return cudaErrorSymbolNotFound;
     memset(attr, 0, sizeof(*attr));
     attr->sharedSizeBytes = 0;
@@ -180,11 +181,12 @@ cudaError_t cudaFuncSetAttribute(const void *func, int attr, int value) {
         return r;
     if (!func)
         return cudaErrorInvalidValue;
-    const char *deviceName = NULL, *ptx = NULL;
-    if (!find_func(func, &deviceName, &ptx) || !deviceName || !ptx)
+    const char *deviceName = NULL;
+    fatbin_t *fb = NULL;
+    if (!find_func_fb(func, &deviceName, &fb) || !deviceName || !fb)
         return cudaErrorSymbolNotFound;
     CUmodule mod = NULL;
-    CUresult cr = module_for(ptx, deviceName, &mod);
+    CUresult cr = module_for_fatbin(fb, &mod);
     if (cr != CUDA_SUCCESS)
         return map_cu(cr);
     CUfunction fn = NULL;

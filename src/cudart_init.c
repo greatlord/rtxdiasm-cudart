@@ -1,4 +1,4 @@
-#include "cudart_internal.h"
+﻿#include "cudart_internal.h"
 
 #if defined(_WIN32)
 #include <direct.h>
@@ -14,7 +14,7 @@
 
 int g_init;
 int g_device;
-cudaError_t g_last;
+ACUDA_CUDART_TLS cudaError_t g_last;
 
 void set_last(cudaError_t e) {
     if (e != cudaSuccess)

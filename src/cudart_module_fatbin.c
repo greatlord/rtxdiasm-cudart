@@ -154,6 +154,21 @@ fatbin_t **g_fatbins;
 size_t g_nfatbins;
 size_t g_fatcap;
 
+int find_func_fb(const void *func, const char **deviceName, fatbin_t **out_fb) {
+    for (size_t i = 0; i < g_nfatbins; i++) {
+        for (size_t f = 0; f < g_fatbins[i]->nfuncs; f++) {
+            if (g_fatbins[i]->funcs[f].hostFun == func) {
+                if (deviceName)
+                    *deviceName = g_fatbins[i]->funcs[f].deviceName;
+                if (out_fb)
+                    *out_fb = g_fatbins[i];
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
 int find_func(const void *func, const char **deviceName, const char **ptx) {
     for (size_t i = 0; i < g_nfatbins; i++) {
         for (size_t f = 0; f < g_fatbins[i]->nfuncs; f++) {

@@ -1,4 +1,4 @@
-#ifndef ACUDA_CUDART_INTERNAL_H
+﻿#ifndef ACUDA_CUDART_INTERNAL_H
 #define ACUDA_CUDART_INTERNAL_H
 
 #include <stdint.h>
@@ -32,7 +32,16 @@ static inline int cudart_cubin_backend(void) {
 
 extern int g_init;
 extern int g_device;
-extern cudaError_t g_last;
+/* CUDA's last error is per thread; PhysX runs the GPU sim on its own worker
+ * thread, so a global here lets one thread consume another thread's error. */
+#if defined(_MSC_VER)
+#define ACUDA_CUDART_TLS __declspec(thread)
+#elif defined(__GNUC__)
+#define ACUDA_CUDART_TLS __thread
+#else
+#define ACUDA_CUDART_TLS
+#endif
+extern ACUDA_CUDART_TLS cudaError_t g_last;
 
 void set_last(cudaError_t e);
 cudaError_t map_cu(CUresult r);
@@ -90,6 +99,7 @@ extern size_t g_nfatbins;
 extern size_t g_fatcap;
 
 int find_func(const void *func, const char **deviceName, const char **ptx);
+int find_func_fb(const void *func, const char **deviceName, fatbin_t **out_fb);
 int find_var(const void *hostVar, const char **deviceName, size_t *size, fatbin_t **out_fb);
 int find_tex(const void *hostVar, fatbin_t **out_fb, const char **name,
              int *normalized);
