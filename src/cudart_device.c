@@ -1,4 +1,4 @@
-#include "cudart_internal.h"
+﻿#include "cudart_internal.h"
 #include "acuda/context.h"
 
 extern acuda_context_t g_acuda_ctx; // defined in driver if needed; use driver API via cu* 
@@ -20,18 +20,194 @@ cudaError_t cudaGetDeviceCount(int *count) {
     return cudaSuccess;
 }
 
+/* Frozen pre-CUDA-10 cudaDeviceProp layout, which is what the unsuffixed
+ * cudaGetDeviceProperties symbol must write: binaries compiled against
+ * CUDA <= 9.x (PhysX 2.8.4 is a CUDA 6.5 build) reserve this layout on
+ * their stack and read totalGlobalMem at offset 0x100.  The current
+ * cudaDeviceProp is 956 bytes with uuid/luid right after the name, so
+ * writing it into an old caller both returns garbage and overruns the
+ * caller's object by 68 bytes.  cudaGetDeviceProperties_v2 keeps the
+ * current layout for CUDA 10+ callers. */
+typedef struct {
+    char name[256];
+    size_t totalGlobalMem;
+    size_t sharedMemPerBlock;
+    int regsPerBlock;
+    int warpSize;
+    size_t memPitch;
+    int maxThreadsPerBlock;
+    int maxThreadsDim[3];
+    int maxGridSize[3];
+    int clockRate;
+    size_t totalConstMem;
+    int major;
+    int minor;
+    size_t textureAlignment;
+    size_t texturePitchAlignment;
+    int deviceOverlap;
+    int multiProcessorCount;
+    int kernelExecTimeoutEnabled;
+    int integrated;
+    int canMapHostMemory;
+    int computeMode;
+    int maxTexture1D;
+    int maxTexture1DMipmap;
+    int maxTexture1DLinear;
+    int maxTexture2D[2];
+    int maxTexture2DMipmap[2];
+    int maxTexture2DLinear[3];
+    int maxTexture2DGather[2];
+    int maxTexture3D[3];
+    int maxTexture3DAlt[3];
+    int maxTextureCubemap;
+    int maxSurface1D;
+    int maxSurface2D[2];
+    int maxSurface3D[3];
+    int maxSurface1DLayered[2];
+    int maxSurface2DLayered[3];
+    int maxSurfaceCubemap;
+    int maxSurfaceCubemapLayered[2];
+    size_t surfaceAlignment;
+    int concurrentKernels;
+    int ECCEnabled;
+    int pciBusID;
+    int pciDeviceID;
+    int pciDomainID;
+    int tccDriver;
+    int asyncEngineCount;
+    int unifiedAddressing;
+    int memoryClockRate;
+    int memoryBusWidth;
+    int l2CacheSize;
+    int maxThreadsPerMultiProcessor;
+    int streamPrioritiesSupported;
+    int globalL1CacheSupported;
+    int localL1CacheSupported;
+    size_t sharedMemPerMultiprocessor;
+    int regsPerMultiprocessor;
+    int managedMemory;
+    int isMultiGpuBoard;
+    int multiGpuBoardGroupID;
+    int hostNativeAtomicSupported;
+    int singleToDoublePrecisionPerfRatio;
+    int pageableMemoryAccess;
+    int concurrentManagedAccess;
+    int computePreemptionSupported;
+    int canUseHostPointerForRegisteredMem;
+    int reserved[64];
+} acuda_legacy_device_prop_t;
+
+typedef char acuda_legacy_device_prop_size_check[
+    (sizeof(acuda_legacy_device_prop_t) == 848) ? 1 : -1];
+
 cudaError_t cudaGetDeviceProperties(struct cudaDeviceProp *prop, int device) {
     if (!prop)
         return cudaErrorInvalidValue;
     cudaError_t r = ensure_init();
     if (r != cudaSuccess)
         return r;
-    CUresult cr = acuda_query_device_properties(prop, device);
+    struct cudaDeviceProp cur;
+    CUresult cr = acuda_query_device_properties(&cur, device);
     r = map_cu(cr);
     if (r != cudaSuccess) {
         set_last(r);
         return r;
     }
+    acuda_legacy_device_prop_t old;
+    memset(&old, 0, sizeof(old));
+    memcpy(old.name, cur.name, sizeof(old.name));
+    old.totalGlobalMem = cur.totalGlobalMem;
+    old.sharedMemPerBlock = cur.sharedMemPerBlock;
+    old.regsPerBlock = cur.regsPerBlock;
+    old.warpSize = cur.warpSize;
+    old.memPitch = cur.memPitch;
+    old.maxThreadsPerBlock = cur.maxThreadsPerBlock;
+    memcpy(old.maxThreadsDim, cur.maxThreadsDim, sizeof(old.maxThreadsDim));
+    memcpy(old.maxGridSize, cur.maxGridSize, sizeof(old.maxGridSize));
+    old.totalConstMem = cur.totalConstMem;
+    old.major = cur.major;
+    old.minor = cur.minor;
+    old.textureAlignment = cur.textureAlignment;
+    old.texturePitchAlignment = cur.texturePitchAlignment;
+    /* Fields the current cudaDeviceProp dropped but the old ABI still
+     * exposes.  The clock rates come from the driver (hwinfo/ADL), not a
+     * constant. */
+    {
+        int av = 0;
+        if (cuDeviceGetAttribute(&av, CU_DEVICE_ATTRIBUTE_CLOCK_RATE,
+                                 device) == CUDA_SUCCESS)
+            old.clockRate = av;
+        if (cuDeviceGetAttribute(&av, 15 /* GPU_OVERLAP */,
+                                 device) == CUDA_SUCCESS)
+            old.deviceOverlap = av;
+        if (cuDeviceGetAttribute(&av, CU_DEVICE_ATTRIBUTE_KERNEL_EXEC_TIMEOUT,
+                                 device) == CUDA_SUCCESS)
+            old.kernelExecTimeoutEnabled = av;
+        if (cuDeviceGetAttribute(&av, CU_DEVICE_ATTRIBUTE_COMPUTE_MODE,
+                                 device) == CUDA_SUCCESS)
+            old.computeMode = av;
+        if (cuDeviceGetAttribute(&av, CU_DEVICE_ATTRIBUTE_MEMORY_CLOCK_RATE,
+                                 device) == CUDA_SUCCESS)
+            old.memoryClockRate = av;
+        if (cuDeviceGetAttribute(&av,
+                                 CU_DEVICE_ATTRIBUTE_GLOBAL_MEMORY_BUS_WIDTH,
+                                 device) == CUDA_SUCCESS)
+            old.memoryBusWidth = av;
+        if (cuDeviceGetAttribute(&av, CU_DEVICE_ATTRIBUTE_L2_CACHE_SIZE,
+                                 device) == CUDA_SUCCESS)
+            old.l2CacheSize = av;
+        if (cuDeviceGetAttribute(
+                &av, CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_MULTIPROCESSOR,
+                device) == CUDA_SUCCESS)
+            old.maxThreadsPerMultiProcessor = av;
+        if (cuDeviceGetAttribute(&av,
+                                 37 /* MAX_TEXTURE1D_LINEAR */,
+                                 device) == CUDA_SUCCESS)
+            old.maxTexture1DLinear = av;
+    }
+    old.multiProcessorCount = cur.multiProcessorCount;
+    old.integrated = cur.integrated;
+    old.canMapHostMemory = cur.canMapHostMemory;
+    old.maxTexture1D = cur.maxTexture1D;
+    old.maxTexture1DMipmap = cur.maxTexture1DMipmap;
+    memcpy(old.maxTexture2D, cur.maxTexture2D, sizeof(old.maxTexture2D));
+    memcpy(old.maxTexture2DMipmap, cur.maxTexture2DMipmap,
+           sizeof(old.maxTexture2DMipmap));
+    memcpy(old.maxTexture2DLinear, cur.maxTexture2DLinear,
+           sizeof(old.maxTexture2DLinear));
+    memcpy(old.maxTexture2DGather, cur.maxTexture2DGather,
+           sizeof(old.maxTexture2DGather));
+    memcpy(old.maxTexture3D, cur.maxTexture3D, sizeof(old.maxTexture3D));
+    memcpy(old.maxTexture3DAlt, cur.maxTexture3DAlt,
+           sizeof(old.maxTexture3DAlt));
+    old.maxTextureCubemap = cur.maxTextureCubemap;
+    old.surfaceAlignment = cur.surfaceAlignment;
+    old.concurrentKernels = cur.concurrentKernels;
+    old.ECCEnabled = cur.ECCEnabled;
+    old.pciBusID = cur.pciBusID;
+    old.pciDeviceID = cur.pciDeviceID;
+    old.pciDomainID = cur.pciDomainID;
+    old.tccDriver = cur.tccDriver;
+    old.asyncEngineCount = cur.asyncEngineCount;
+    old.unifiedAddressing = cur.unifiedAddressing;
+    old.memoryBusWidth = cur.memoryBusWidth;
+    old.l2CacheSize = cur.l2CacheSize;
+    old.maxThreadsPerMultiProcessor = cur.maxThreadsPerMultiProcessor;
+    old.streamPrioritiesSupported = cur.streamPrioritiesSupported;
+    old.globalL1CacheSupported = cur.globalL1CacheSupported;
+    old.localL1CacheSupported = cur.localL1CacheSupported;
+    old.sharedMemPerMultiprocessor = cur.sharedMemPerMultiprocessor;
+    old.regsPerMultiprocessor = cur.regsPerMultiprocessor;
+    old.managedMemory = cur.managedMemory;
+    old.isMultiGpuBoard = cur.isMultiGpuBoard;
+    old.multiGpuBoardGroupID = cur.multiGpuBoardGroupID;
+    old.hostNativeAtomicSupported = cur.hostNativeAtomicSupported;
+    old.pageableMemoryAccess = cur.pageableMemoryAccess;
+    old.concurrentManagedAccess = cur.concurrentManagedAccess;
+    old.computePreemptionSupported = cur.computePreemptionSupported;
+    old.canUseHostPointerForRegisteredMem =
+        cur.canUseHostPointerForRegisteredMem;
+    memcpy(prop, &old, sizeof(old));
     return cudaSuccess;
 }
 
@@ -123,7 +299,19 @@ cudaError_t cudaThreadExchangeStreamCaptureMode(int *mode) {
 
 cudaError_t cudaGetDeviceProperties_v2(struct cudaDeviceProp *prop,
                                        int device) {
-    return cudaGetDeviceProperties(prop, device);
+    /* CUDA 10+ layout: the caller holds the current (956-byte) struct. */
+    if (!prop)
+        return cudaErrorInvalidValue;
+    cudaError_t r = ensure_init();
+    if (r != cudaSuccess)
+        return r;
+    CUresult cr = acuda_query_device_properties(prop, device);
+    r = map_cu(cr);
+    if (r != cudaSuccess) {
+        set_last(r);
+        return r;
+    }
+    return cudaSuccess;
 }
 
 cudaError_t cudaDeviceGetAttribute(int *value, int attrib, int device) {

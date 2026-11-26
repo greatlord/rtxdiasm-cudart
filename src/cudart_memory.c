@@ -5,6 +5,8 @@ CUresult ACUDA_CUDAAPI cuMemHostAlloc(void **pp, size_t bytesize, unsigned int F
 CUresult ACUDA_CUDAAPI cuMemFreeHost(void *p);
 CUresult ACUDA_CUDAAPI cuMemHostGetDevicePointer(void **pdptr, void *p, unsigned int Flags);
 CUresult ACUDA_CUDAAPI cuMemHostGetFlags(unsigned int *pFlags, void *p);
+CUresult ACUDA_CUDAAPI cuMemGetAddressRange(CUdeviceptr *pbase, size_t *psize,
+                                            CUdeviceptr dptr);
 
 static struct {
     void *ptr;
@@ -104,6 +106,19 @@ cudaError_t cudaFreeAsync(void *devPtr, cudaStream_t stream) {
 
 
 
+static int ptr_is_device(const void *p) {
+    /* Arena allocations are tracked by the driver; host allocations are not.
+     * cuMemGetAddressRange reports the allocation size for tracked pointers
+     * and 0 for everything else. */
+    size_t sz = 0;
+    if (!p)
+        return 0;
+    if (cuMemGetAddressRange(NULL, &sz, (CUdeviceptr)(uintptr_t)p) !=
+        CUDA_SUCCESS)
+        return 0;
+    return sz != 0;
+}
+
 cudaError_t cudaMemcpy(void *dst, const void *src, size_t count,
                        cudaMemcpyKind kind) {
     return cudaMemcpyAsync(dst, src, count, kind, NULL);
@@ -124,6 +139,20 @@ cudaError_t cudaMemcpyAsync(void *dst, const void *src, size_t count,
     if (getenv("ACUDA_TRACE"))
         fprintf(stderr, "acuda-trace ?? memcpy dst=%p src=%p count=%zu kind=%d\n",
                 dst, src, count, (int)kind);
+    if (kind == cudaMemcpyDefault) {
+        /* PhysX 2.8.4 uses cudaMemcpyDefault for particle uploads.  Classify
+         * both sides; a device pointer is one the driver's arena tracks. */
+        int sd = ptr_is_device(src);
+        int dd = ptr_is_device(dst);
+        if (dd && sd)
+            kind = cudaMemcpyDeviceToDevice;
+        else if (dd)
+            kind = cudaMemcpyHostToDevice;
+        else if (sd)
+            kind = cudaMemcpyDeviceToHost;
+        else
+            kind = cudaMemcpyHostToHost;
+    }
     switch (kind) {
     case cudaMemcpyHostToHost:
         memmove(dst, src, count);
@@ -197,10 +226,17 @@ cudaError_t cudaPointerGetAttributes(struct cudaPointerAttributes *attrs,
     if (!ptr)
         return cudaErrorInvalidValue;
     memset(attrs, 0, sizeof(*attrs));
-    attrs->type = cudaMemoryTypeDevice;
-    attrs->device = g_device;
-    attrs->devicePointer = (void *)ptr;
-    attrs->hostPointer = NULL;
+    if (ptr_is_device(ptr)) {
+        attrs->type = cudaMemoryTypeDevice;
+        attrs->device = g_device;
+        attrs->devicePointer = (void *)ptr;
+        attrs->hostPointer = NULL;
+    } else {
+        attrs->type = cudaMemoryTypeHost;
+        attrs->device = g_device;
+        attrs->devicePointer = (void *)ptr;
+        attrs->hostPointer = (void *)ptr;
+    }
     return cudaSuccess;
 }
 
