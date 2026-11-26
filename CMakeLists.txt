@@ -14,6 +14,7 @@ set(RTXCUDART_SOURCES
   src/cudart_device.c
   src/cudart_error.c
   src/cudart_init.c
+  src/cudart_legacy.c
   src/cudart_memory.c
   src/cudart_module_fatbin.c
   src/cudart_module_launch.c
