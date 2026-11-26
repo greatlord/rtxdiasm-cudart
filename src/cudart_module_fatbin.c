@@ -91,7 +91,43 @@ static int fatbin_extract_ptx(const unsigned char *data, size_t len,
 
 static fatbin_t *fatbin_of(void **handle) { return (fatbin_t *)handle; }
 
+/* __fatBinC_Wrapper_t for CUDA 2.x-4.x compilers:
+ *   uint32 magic == 0x466243B1; uint32 version == 1;
+ *   const void *data;        <- fatbin image (0xBA55ED50)
+ *   const char *filename;
+ * The image handed to __cudaRegisterFatBinary is the wrapper, not the
+ * fatbin, so unwrap it before any parsing. */
+static const unsigned char *fatbin_unwrap(const unsigned char *blob,
+                                          size_t *len_out) {
+    uint32_t magic = 0, version = 0;
+    if (!blob)
+        return NULL;
+    memcpy(&magic, blob, 4);
+    if (magic != 0x466243B1u)
+        return blob;
+    memcpy(&version, blob + 4, 4);
+    if (version != 1)
+        return blob;
+    const void *inner = NULL;
+    memcpy(&inner, blob + 8, sizeof(inner));
+    if (!inner)
+        return blob;
+    uint32_t imagic = 0;
+    memcpy(&imagic, inner, 4);
+    if (imagic != 0xBA55ED50u)
+        return blob;
+    uint64_t files_size = 0;
+    memcpy(&files_size, (const unsigned char *)inner + 8, 8);
+    if (files_size == 0 || files_size > ((uint64_t)1 << 30))
+        return blob;
+    if (len_out)
+        *len_out = 16 + (size_t)files_size;
+    return (const unsigned char *)inner;
+}
+
 void **__cudaRegisterFatBinary(void *fatCubin) {
+    if (getenv("ACUDA_TRACE"))
+        fprintf(stderr, "ACuda-cudart: __cudaRegisterFatBinary(%p)\n", fatCubin);
     fatbin_t *fb = calloc(1, sizeof(*fb));
     if (!fb)
         return NULL;
@@ -117,8 +153,14 @@ void **__cudaRegisterFatBinary(void *fatCubin) {
                 }
             }
         }
-        size_t len = strlen((const char *)fatCubin);
-        if (looks_like_ptx_text((const char *)fatCubin, len)) {
+        size_t len = 0;
+        const unsigned char *image =
+            fatbin_unwrap((const unsigned char *)fatCubin, &len);
+        if (len == 0) {
+            /* Not a version-1 wrapper: treat it as a text blob. */
+            len = strlen((const char *)fatCubin);
+        }
+        if (looks_like_ptx_text((const char *)image, len)) {
             fb->entries = malloc(sizeof(*fb->entries));
             if (!fb->entries) {
                 free(fb);
@@ -130,20 +172,28 @@ void **__cudaRegisterFatBinary(void *fatCubin) {
                 free(fb);
                 return NULL;
             }
-            memcpy(fb->entries[0].ptx, fatCubin, len + 1);
+            memcpy(fb->entries[0].ptx, image, len + 1);
             fb->entries[0].ptx_len = len;
             fb->nentries = 1;
         } else {
             char *ptx = NULL;
             size_t ptx_len = 0;
             if (cudart_cubin_backend() != 2) {
-                for (size_t probe = 512; probe <= 1 << 20; probe *= 2) {
-                    if (fatbin_extract_ptx(fatCubin, probe, &ptx, &ptx_len) == 0)
-                        break;
+                if (len) {
+                    fatbin_extract_ptx(image, len, &ptx, &ptx_len);
+                } else {
+                    for (size_t probe = 512; probe <= 1 << 20; probe *= 2) {
+                        if (fatbin_extract_ptx(fatCubin, probe, &ptx, &ptx_len) == 0)
+                            break;
+                    }
                 }
             }
             if (!ptx && cudart_cubin_backend() != 1)
                 fatbin_lift_ptx(fatCubin, NULL, &ptx, &ptx_len);
+            if (getenv("ACUDA_TRACE"))
+                fprintf(stderr,
+                        "ACuda-cudart: fatbin image=%p len=%zu ptx=%p ptx_len=%zu\n",
+                        (const void *)image, len, (void *)ptx, ptx_len);
             if (ptx) {
                 fb->entries = malloc(sizeof(*fb->entries));
                 if (!fb->entries) {
@@ -170,6 +220,9 @@ void __cudaRegisterFunction(void **fatCubinHandle, const char *hostFun,
                             char *deviceFun, const char *deviceName,
                             int thread_limit, void *tid, void *bid, void *bDim,
                             void *gDim, int *wSize) {
+    if (getenv("ACUDA_TRACE"))
+        fprintf(stderr, "ACuda-cudart: __cudaRegisterFunction(%s)\n",
+                deviceName ? deviceName : "?");
     (void)deviceFun;
     (void)thread_limit;
     (void)tid;

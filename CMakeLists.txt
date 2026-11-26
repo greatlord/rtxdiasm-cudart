@@ -1,8 +1,9 @@
-cmake_minimum_required(VERSION 3.21)
+﻿cmake_minimum_required(VERSION 3.21)
 project(rtxdiasm_guard LANGUAGES C)
 
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
+
 
 # CUDA Runtime API shim (cudart) split from ACuda.
 # Builds requested output names:
@@ -99,6 +100,13 @@ else()
   set_target_properties(rtxcudart PROPERTIES
     WINDOWS_EXPORT_ALL_SYMBOLS ON
   )
+  if(MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 4)
+    # CUDA's runtime API uses the __stdcall convention (CUDARTAPI) on 32-bit
+    # Windows.  Callers such as PhysXCore were compiled with it and expect the
+    # callee to pop the arguments; cdecl exports leave the stack off by the
+    # argument bytes after every call, which corrupts the caller's frame.
+    target_compile_options(rtxcudart PRIVATE /Gz)
+  endif()
 endif()
 
 # Warnings: inherit from integrator if provided, else reasonable defaults.

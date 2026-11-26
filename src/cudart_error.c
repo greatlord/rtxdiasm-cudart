@@ -1,8 +1,10 @@
-#include "cudart_internal.h"
+﻿#include "cudart_internal.h"
 
 cudaError_t cudaGetLastError(void) {
     cudaError_t e = g_last;
     g_last = cudaSuccess;
+    if (e != cudaSuccess && getenv("ACUDA_TRACE"))
+        fprintf(stderr, "ACuda-cudart: cudaGetLastError -> %d\n", (int)e);
     return e;
 }
 

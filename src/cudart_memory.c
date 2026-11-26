@@ -1,4 +1,4 @@
-#include "cudart_internal.h"
+﻿#include "cudart_internal.h"
 
 /* Win32 x86: ensure driver host-memory APIs are seen with stdcall. */
 CUresult ACUDA_CUDAAPI cuMemHostAlloc(void **pp, size_t bytesize, unsigned int Flags);
@@ -213,6 +213,9 @@ cudaError_t cudaMemGetInfo(size_t *freeBytes, size_t *totalBytes) {
         *totalBytes = total;
     if (freeBytes)
         *freeBytes = total > g_live_bytes ? total - g_live_bytes : 0;
+    if (getenv("ACUDA_TRACE"))
+        fprintf(stderr, "ACuda-cudart: cudaMemGetInfo free=%zu total=%zu live=%zu\n",
+                freeBytes ? *freeBytes : (size_t)0, total, g_live_bytes);
     return cudaSuccess;
 }
 

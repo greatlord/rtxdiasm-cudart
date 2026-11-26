@@ -31,8 +31,23 @@ static ACUDA_TLS unsigned char g_launch_args[ACUDA_LEGACY_ARG_BYTES];
 static ACUDA_TLS size_t g_launch_off[ACUDA_LEGACY_MAX_ARGS];
 static ACUDA_TLS int g_launch_nargs;
 
+static int legacy_trace(void) {
+    static int cached = -1;
+    if (cached < 0) {
+        const char *s = getenv("ACUDA_CUDART_TRACE");
+        cached = (s && *s) ? 1 : 0;
+    }
+    return cached;
+}
+
 cudaError_t cudaConfigureCall(dim3 gridDim, dim3 blockDim, size_t sharedMem,
                               cudaStream_t stream) {
+    if (legacy_trace())
+        fprintf(stderr,
+                "ACuda-cudart: cudaConfigureCall grid=%u,%u,%u block=%u,%u,%u "
+                "shm=%zu\n",
+                gridDim.x, gridDim.y, gridDim.z, blockDim.x, blockDim.y,
+                blockDim.z, sharedMem);
     g_launch_nargs = 0;
     if (__cudaPushCallConfiguration(gridDim, blockDim, sharedMem,
                                     (void *)stream) != 0) {
@@ -57,11 +72,18 @@ cudaError_t cudaSetupArgument(const void *arg, size_t size, size_t offset) {
     if (size)
         memcpy(g_launch_args + offset, arg, size);
     g_launch_off[g_launch_nargs++] = offset;
+    if (legacy_trace())
+        fprintf(stderr,
+                "ACuda-cudart: cudaSetupArgument size=%zu off=%zu nargs=%d\n",
+                size, offset, g_launch_nargs);
     set_last(cudaSuccess);
     return cudaSuccess;
 }
 
 cudaError_t cudaLaunch(const void *func) {
+    if (legacy_trace())
+        fprintf(stderr, "ACuda-cudart: cudaLaunch func=%p nargs=%d\n", func,
+                g_launch_nargs);
     dim3 gridDim, blockDim;
     size_t sharedMem = 0;
     void *stream = NULL;
@@ -74,6 +96,20 @@ cudaError_t cudaLaunch(const void *func) {
     void *args[ACUDA_LEGACY_MAX_ARGS];
     for (int i = 0; i < g_launch_nargs; i++)
         args[i] = g_launch_args + g_launch_off[i];
+    /* cudaSetupArgument may be called out of parameter order; cuLaunchKernel
+     * wants the pointers in parameter order, which is ascending offset. */
+    for (int i = 1; i < g_launch_nargs; i++) {
+        void *key = args[i];
+        size_t key_off = g_launch_off[i];
+        int j = i - 1;
+        while (j >= 0 && g_launch_off[j] > key_off) {
+            args[j + 1] = args[j];
+            g_launch_off[j + 1] = g_launch_off[j];
+            j--;
+        }
+        args[j + 1] = key;
+        g_launch_off[j + 1] = key_off;
+    }
     return cudaLaunchKernel(func, gridDim, blockDim, args, sharedMem,
                             (cudaStream_t)stream);
 }

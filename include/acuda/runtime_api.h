@@ -10,6 +10,21 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/* CUDA's runtime API uses the __stdcall convention on 32-bit Windows
+ * (CUDARTAPI): the callee pops the arguments.  Callers such as PhysX were
+ * compiled against NVIDIA's headers with that convention, so a cdecl export
+ * leaves the caller's stack off by the argument bytes after every call and
+ * eventually returns into garbage. */
+#if defined(_WIN32) && defined(_M_IX86)
+#ifndef CUDARTAPI
+#define CUDARTAPI __stdcall
+#endif
+#else
+#ifndef CUDARTAPI
+#define CUDARTAPI
+#endif
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -388,233 +403,233 @@ typedef enum cudaLimit_enum {
 } cudaLimit;
 
 /* --- initialization / version --- */
-cudaError_t cudaGetDeviceCount(int *count);
-cudaError_t cudaGetDeviceProperties(struct cudaDeviceProp *prop, int device);
-cudaError_t cudaGetDeviceProperties_v2(struct cudaDeviceProp *prop,
+cudaError_t CUDARTAPI cudaGetDeviceCount(int *count);
+cudaError_t CUDARTAPI cudaGetDeviceProperties(struct cudaDeviceProp *prop, int device);
+cudaError_t CUDARTAPI cudaGetDeviceProperties_v2(struct cudaDeviceProp *prop,
                                        int device);
-cudaError_t cudaDeviceGetAttribute(int *value, int attrib, int device);
-cudaError_t cudaSetDevice(int device);
-cudaError_t cudaGetDevice(int *device);
-cudaError_t cudaDriverGetVersion(int *driverVersion);
-cudaError_t cudaRuntimeGetVersion(int *runtimeVersion);
-cudaError_t cudaDeviceReset(void);
-cudaError_t cudaDeviceSynchronize(void);
-cudaError_t cudaDeviceGetLimit(size_t *pValue, int limit);
-cudaError_t cudaDeviceSetLimit(int limit, size_t value);
-cudaError_t cudaThreadExchangeStreamCaptureMode(int *mode);
+cudaError_t CUDARTAPI cudaDeviceGetAttribute(int *value, int attrib, int device);
+cudaError_t CUDARTAPI cudaSetDevice(int device);
+cudaError_t CUDARTAPI cudaGetDevice(int *device);
+cudaError_t CUDARTAPI cudaDriverGetVersion(int *driverVersion);
+cudaError_t CUDARTAPI cudaRuntimeGetVersion(int *runtimeVersion);
+cudaError_t CUDARTAPI cudaDeviceReset(void);
+cudaError_t CUDARTAPI cudaDeviceSynchronize(void);
+cudaError_t CUDARTAPI cudaDeviceGetLimit(size_t *pValue, int limit);
+cudaError_t CUDARTAPI cudaDeviceSetLimit(int limit, size_t value);
+cudaError_t CUDARTAPI cudaThreadExchangeStreamCaptureMode(int *mode);
 
 /* --- errors --- */
-cudaError_t cudaGetLastError(void);
-cudaError_t cudaPeekAtLastError(void);
-const char *cudaGetErrorString(cudaError_t error);
-const char *cudaGetErrorName(cudaError_t error);
+cudaError_t CUDARTAPI cudaGetLastError(void);
+cudaError_t CUDARTAPI cudaPeekAtLastError(void);
+const char * CUDARTAPI cudaGetErrorString(cudaError_t error);
+const char * CUDARTAPI cudaGetErrorName(cudaError_t error);
 
 /* --- memory --- */
-cudaError_t cudaMalloc(void **devPtr, size_t size);
-cudaError_t cudaFree(void *devPtr);
-cudaError_t cudaMallocAsync(void **devPtr, size_t size, cudaStream_t stream);
-cudaError_t cudaFreeAsync(void *devPtr, cudaStream_t stream);
-cudaError_t cudaMemcpy(void *dst, const void *src, size_t count,
+cudaError_t CUDARTAPI cudaMalloc(void **devPtr, size_t size);
+cudaError_t CUDARTAPI cudaFree(void *devPtr);
+cudaError_t CUDARTAPI cudaMallocAsync(void **devPtr, size_t size, cudaStream_t stream);
+cudaError_t CUDARTAPI cudaFreeAsync(void *devPtr, cudaStream_t stream);
+cudaError_t CUDARTAPI cudaMemcpy(void *dst, const void *src, size_t count,
                        cudaMemcpyKind kind);
-cudaError_t cudaMemcpyAsync(void *dst, const void *src, size_t count,
+cudaError_t CUDARTAPI cudaMemcpyAsync(void *dst, const void *src, size_t count,
                             cudaMemcpyKind kind, cudaStream_t stream);
-cudaError_t cudaMemcpy2DAsync(void *dst, size_t dpitch, const void *src,
+cudaError_t CUDARTAPI cudaMemcpy2DAsync(void *dst, size_t dpitch, const void *src,
                               size_t spitch, size_t width, size_t height,
                               cudaMemcpyKind kind, cudaStream_t stream);
-cudaError_t cudaMemcpyPeerAsync(void *dst, int dstDevice, const void *src,
+cudaError_t CUDARTAPI cudaMemcpyPeerAsync(void *dst, int dstDevice, const void *src,
                                 int srcDevice, size_t count,
                                 cudaStream_t stream);
-cudaError_t cudaMemset(void *devPtr, int value, size_t count);
-cudaError_t cudaMemsetAsync(void *devPtr, int value, size_t count,
+cudaError_t CUDARTAPI cudaMemset(void *devPtr, int value, size_t count);
+cudaError_t CUDARTAPI cudaMemsetAsync(void *devPtr, int value, size_t count,
                             cudaStream_t stream);
 /* --- texture arrays and texture objects --- */
-cudaError_t cudaMallocArray(cudaArray_t *array,
+cudaError_t CUDARTAPI cudaMallocArray(cudaArray_t *array,
                             const cudaChannelFormatDesc *desc, size_t width,
                             size_t height, unsigned int flags);
-cudaError_t cudaMalloc3DArray(cudaArray_t *array,
+cudaError_t CUDARTAPI cudaMalloc3DArray(cudaArray_t *array,
                               const cudaChannelFormatDesc *desc,
                               struct cudaExtent_st extent,
                               unsigned int flags);
-cudaError_t cudaMallocMipmappedArray(cudaMipmappedArray_t *mipmappedArray,
+cudaError_t CUDARTAPI cudaMallocMipmappedArray(cudaMipmappedArray_t *mipmappedArray,
                                      const cudaChannelFormatDesc *desc,
                                      struct cudaExtent_st extent,
                                      unsigned int numLevels,
                                      unsigned int flags);
-cudaError_t cudaFreeArray(cudaArray_t array);
-cudaError_t cudaFreeMipmappedArray(cudaMipmappedArray_t mipmappedArray);
-cudaError_t cudaGetMipmappedArrayLevel(cudaArray_t *levelArray,
+cudaError_t CUDARTAPI cudaFreeArray(cudaArray_t array);
+cudaError_t CUDARTAPI cudaFreeMipmappedArray(cudaMipmappedArray_t mipmappedArray);
+cudaError_t CUDARTAPI cudaGetMipmappedArrayLevel(cudaArray_t *levelArray,
                                        cudaMipmappedArray_const_t mipmappedArray,
                                        unsigned int level);
-cudaError_t cudaCreateTextureObject(cudaTextureObject_t *pTexObject,
+cudaError_t CUDARTAPI cudaCreateTextureObject(cudaTextureObject_t *pTexObject,
                                     const cudaResourceDesc *pResDesc,
                                     const cudaTextureDesc *pTexDesc,
                                     const cudaResourceViewDesc *pResViewDesc);
-cudaError_t cudaDestroyTextureObject(cudaTextureObject_t texObject);
-cudaError_t cudaGetTextureObjectResourceDesc(cudaResourceDesc *pResDesc,
+cudaError_t CUDARTAPI cudaDestroyTextureObject(cudaTextureObject_t texObject);
+cudaError_t CUDARTAPI cudaGetTextureObjectResourceDesc(cudaResourceDesc *pResDesc,
                                              cudaTextureObject_t texObject);
-cudaError_t cudaGetTextureObjectTextureDesc(cudaTextureDesc *pTexDesc,
+cudaError_t CUDARTAPI cudaGetTextureObjectTextureDesc(cudaTextureDesc *pTexDesc,
                                             cudaTextureObject_t texObject);
-cudaError_t cudaCreateSurfaceObject(cudaSurfaceObject_t *pSurfObject,
+cudaError_t CUDARTAPI cudaCreateSurfaceObject(cudaSurfaceObject_t *pSurfObject,
                                     const cudaResourceDesc *pResDesc);
-cudaError_t cudaDestroySurfaceObject(cudaSurfaceObject_t surfObject);
-cudaError_t cudaGetSurfaceObjectResourceDesc(
+cudaError_t CUDARTAPI cudaDestroySurfaceObject(cudaSurfaceObject_t surfObject);
+cudaError_t CUDARTAPI cudaGetSurfaceObjectResourceDesc(
     cudaResourceDesc *pResDesc, cudaSurfaceObject_t surfObject);
-cudaError_t cudaMemcpyToArray(cudaArray_t dst, size_t wOffset, size_t hOffset,
+cudaError_t CUDARTAPI cudaMemcpyToArray(cudaArray_t dst, size_t wOffset, size_t hOffset,
                                const void *src, size_t count,
                                cudaMemcpyKind kind);
-cudaError_t cudaMemcpyFromArray(void *dst, cudaArray_const_t src,
+cudaError_t CUDARTAPI cudaMemcpyFromArray(void *dst, cudaArray_const_t src,
                                 size_t wOffset, size_t hOffset, size_t count,
                                 cudaMemcpyKind kind);
-cudaError_t cudaMemcpyArrayToArray(cudaArray_t dst, size_t wOffsetDst,
+cudaError_t CUDARTAPI cudaMemcpyArrayToArray(cudaArray_t dst, size_t wOffsetDst,
                                    size_t hOffsetDst, cudaArray_const_t src,
                                    size_t wOffsetSrc, size_t hOffsetSrc,
                                    size_t count, cudaMemcpyKind kind);
-cudaError_t cudaMemcpyToArrayAsync(cudaArray_t dst, size_t wOffset,
+cudaError_t CUDARTAPI cudaMemcpyToArrayAsync(cudaArray_t dst, size_t wOffset,
                                    size_t hOffset, const void *src,
                                    size_t count, cudaMemcpyKind kind,
                                    cudaStream_t stream);
-cudaError_t cudaMemcpyFromArrayAsync(void *dst, cudaArray_const_t src,
+cudaError_t CUDARTAPI cudaMemcpyFromArrayAsync(void *dst, cudaArray_const_t src,
                                      size_t wOffset, size_t hOffset,
                                      size_t count, cudaMemcpyKind kind,
                                      cudaStream_t stream);
-cudaError_t cudaMemcpy2DToArray(cudaArray_t dst, size_t wOffset,
+cudaError_t CUDARTAPI cudaMemcpy2DToArray(cudaArray_t dst, size_t wOffset,
                                 size_t hOffset, const void *src, size_t spitch,
                                 size_t width, size_t height,
                                 cudaMemcpyKind kind);
-cudaError_t cudaMemcpy2DToArrayAsync(cudaArray_t dst, size_t wOffset,
+cudaError_t CUDARTAPI cudaMemcpy2DToArrayAsync(cudaArray_t dst, size_t wOffset,
                                      size_t hOffset, const void *src,
                                      size_t spitch, size_t width,
                                      size_t height, cudaMemcpyKind kind,
                                      cudaStream_t stream);
-cudaError_t cudaMemcpy2DFromArray(void *dst, size_t dpitch,
+cudaError_t CUDARTAPI cudaMemcpy2DFromArray(void *dst, size_t dpitch,
                                   cudaArray_const_t src, size_t wOffset,
                                   size_t hOffset, size_t width, size_t height,
                                   cudaMemcpyKind kind);
-cudaError_t cudaMemcpy2DFromArrayAsync(void *dst, size_t dpitch,
+cudaError_t CUDARTAPI cudaMemcpy2DFromArrayAsync(void *dst, size_t dpitch,
                                        cudaArray_const_t src, size_t wOffset,
                                        size_t hOffset, size_t width,
                                        size_t height,
                                        cudaMemcpyKind kind,
                                        cudaStream_t stream);
-cudaError_t cudaMemcpy2DArrayToArray(cudaArray_t dst, size_t wOffsetDst,
+cudaError_t CUDARTAPI cudaMemcpy2DArrayToArray(cudaArray_t dst, size_t wOffsetDst,
                                      size_t hOffsetDst, cudaArray_const_t src,
                                      size_t wOffsetSrc, size_t hOffsetSrc,
                                      size_t width, size_t height,
                                      cudaMemcpyKind kind);
-cudaError_t cudaMemcpy3D(const struct cudaMemcpy3DParms_st *p);
-cudaError_t cudaMemcpy3DAsync(const struct cudaMemcpy3DParms_st *p,
+cudaError_t CUDARTAPI cudaMemcpy3D(const struct cudaMemcpy3DParms_st *p);
+cudaError_t CUDARTAPI cudaMemcpy3DAsync(const struct cudaMemcpy3DParms_st *p,
                               cudaStream_t stream);
-cudaError_t cudaMemGetInfo(size_t *freeBytes, size_t *totalBytes);
-cudaError_t cudaPointerGetAttributes(struct cudaPointerAttributes *attrs,
+cudaError_t CUDARTAPI cudaMemGetInfo(size_t *freeBytes, size_t *totalBytes);
+cudaError_t CUDARTAPI cudaPointerGetAttributes(struct cudaPointerAttributes *attrs,
                                      const void *ptr);
-cudaError_t cudaHostAlloc(void **ptr, size_t size, unsigned int flags);
-cudaError_t cudaFreeHost(void *ptr);
-cudaError_t cudaHostGetDevicePointer(void **pDevice, void *pHost, unsigned int flags);
-cudaError_t cudaHostGetFlags(unsigned int *pFlags, void *pHost);
-cudaError_t cudaMemPoolGetAttribute(cudaMemPool_t memPool,
+cudaError_t CUDARTAPI cudaHostAlloc(void **ptr, size_t size, unsigned int flags);
+cudaError_t CUDARTAPI cudaFreeHost(void *ptr);
+cudaError_t CUDARTAPI cudaHostGetDevicePointer(void **pDevice, void *pHost, unsigned int flags);
+cudaError_t CUDARTAPI cudaHostGetFlags(unsigned int *pFlags, void *pHost);
+cudaError_t CUDARTAPI cudaMemPoolGetAttribute(cudaMemPool_t memPool,
                                    int attr, void *value);
-cudaError_t cudaMemPoolSetAttribute(cudaMemPool_t memPool,
+cudaError_t CUDARTAPI cudaMemPoolSetAttribute(cudaMemPool_t memPool,
                                    int attr, void *value);
-cudaError_t cudaDeviceGetDefaultMemPool(cudaMemPool_t *pool_out, int device);
-cudaError_t cudaDeviceSetMemPool(int device, cudaMemPool_t pool);
-cudaError_t cudaMemPoolTrimTo(cudaMemPool_t pool, size_t minBytesToKeep);
+cudaError_t CUDARTAPI cudaDeviceGetDefaultMemPool(cudaMemPool_t *pool_out, int device);
+cudaError_t CUDARTAPI cudaDeviceSetMemPool(int device, cudaMemPool_t pool);
+cudaError_t CUDARTAPI cudaMemPoolTrimTo(cudaMemPool_t pool, size_t minBytesToKeep);
 
 /* --- streams / events --- */
-cudaError_t cudaStreamCreate(cudaStream_t *pStream);
-cudaError_t cudaStreamCreateWithFlags(cudaStream_t *pStream,
+cudaError_t CUDARTAPI cudaStreamCreate(cudaStream_t *pStream);
+cudaError_t CUDARTAPI cudaStreamCreateWithFlags(cudaStream_t *pStream,
                                       unsigned int flags);
-cudaError_t cudaStreamDestroy(cudaStream_t stream);
-cudaError_t cudaStreamSynchronize(cudaStream_t stream);
-cudaError_t cudaStreamQuery(cudaStream_t stream);
-cudaError_t cudaStreamWaitEvent(cudaStream_t stream, cudaEvent_t event,
+cudaError_t CUDARTAPI cudaStreamDestroy(cudaStream_t stream);
+cudaError_t CUDARTAPI cudaStreamSynchronize(cudaStream_t stream);
+cudaError_t CUDARTAPI cudaStreamQuery(cudaStream_t stream);
+cudaError_t CUDARTAPI cudaStreamWaitEvent(cudaStream_t stream, cudaEvent_t event,
                                unsigned int flags);
-cudaError_t cudaEventCreate(cudaEvent_t *event);
-cudaError_t cudaEventCreateWithFlags(cudaEvent_t *event, unsigned int flags);
-cudaError_t cudaEventDestroy(cudaEvent_t event);
-cudaError_t cudaEventRecord(cudaEvent_t event, cudaStream_t stream);
-cudaError_t cudaEventRecordWithFlags(cudaEvent_t event, cudaStream_t stream,
+cudaError_t CUDARTAPI cudaEventCreate(cudaEvent_t *event);
+cudaError_t CUDARTAPI cudaEventCreateWithFlags(cudaEvent_t *event, unsigned int flags);
+cudaError_t CUDARTAPI cudaEventDestroy(cudaEvent_t event);
+cudaError_t CUDARTAPI cudaEventRecord(cudaEvent_t event, cudaStream_t stream);
+cudaError_t CUDARTAPI cudaEventRecordWithFlags(cudaEvent_t event, cudaStream_t stream,
                                     unsigned int flags);
-cudaError_t cudaEventSynchronize(cudaEvent_t event);
-cudaError_t cudaEventQuery(cudaEvent_t event);
-cudaError_t cudaEventElapsedTime(float *ms, cudaEvent_t start,
+cudaError_t CUDARTAPI cudaEventSynchronize(cudaEvent_t event);
+cudaError_t CUDARTAPI cudaEventQuery(cudaEvent_t event);
+cudaError_t CUDARTAPI cudaEventElapsedTime(float *ms, cudaEvent_t start,
                                  cudaEvent_t end);
 
 /* --- launch --- */
-cudaError_t cudaLaunchKernel(const void *func, dim3 gridDim, dim3 blockDim,
+cudaError_t CUDARTAPI cudaLaunchKernel(const void *func, dim3 gridDim, dim3 blockDim,
                              void **args, size_t sharedMem,
                              cudaStream_t stream);
-cudaError_t cudaLaunchKernelExC(const cudaLaunchConfig_t *config,
+cudaError_t CUDARTAPI cudaLaunchKernelExC(const cudaLaunchConfig_t *config,
                                 const void *func, void **args);
-cudaError_t cudaFuncGetAttributes(struct cudaFuncAttributes *attr,
+cudaError_t CUDARTAPI cudaFuncGetAttributes(struct cudaFuncAttributes *attr,
                                   const void *func);
-cudaError_t cudaFuncSetAttribute(const void *func, int attr, int value);
-cudaError_t cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+cudaError_t CUDARTAPI cudaFuncSetAttribute(const void *func, int attr, int value);
+cudaError_t CUDARTAPI cudaOccupancyMaxActiveBlocksPerMultiprocessor(
     int *numBlocks, const void *func, int blockSize, size_t dynamicSMemSize);
-cudaError_t cudaOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(
+cudaError_t CUDARTAPI cudaOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(
     int *numBlocks, const void *func, int blockSize, size_t dynamicSMemSize,
     unsigned int flags);
-cudaError_t cudaLaunchHostFunc(cudaStream_t stream,
+cudaError_t CUDARTAPI cudaLaunchHostFunc(cudaStream_t stream,
                                void (*fn)(void *userData), void *userData);
-cudaError_t cudaLaunchCooperativeKernel(const void *func, dim3 gridDim,
+cudaError_t CUDARTAPI cudaLaunchCooperativeKernel(const void *func, dim3 gridDim,
                                         dim3 blockDim, void **args,
                                         size_t sharedMem,
                                         cudaStream_t stream);
-unsigned __cudaPushCallConfiguration(dim3 gridDim, dim3 blockDim,
+unsigned CUDARTAPI __cudaPushCallConfiguration(dim3 gridDim, dim3 blockDim,
                                      size_t sharedMem, void *stream);
-cudaError_t __cudaPopCallConfiguration(dim3 *gridDim, dim3 *blockDim,
+cudaError_t CUDARTAPI __cudaPopCallConfiguration(dim3 *gridDim, dim3 *blockDim,
                                        size_t *sharedMem, void *stream);
-void __cudaInitModule(void);
-cudaError_t cudaProfilerStart(void);
-cudaError_t cudaProfilerStop(void);
-cudaError_t cudaGetDriverEntryPoint(const char *symbol, void **funcPtr,
+void CUDARTAPI __cudaInitModule(void);
+cudaError_t CUDARTAPI cudaProfilerStart(void);
+cudaError_t CUDARTAPI cudaProfilerStop(void);
+cudaError_t CUDARTAPI cudaGetDriverEntryPoint(const char *symbol, void **funcPtr,
                                     unsigned long long flags,
                                     int *driverStatus);
-cudaError_t cudaGetDriverEntryPointByVersion(const char *symbol,
+cudaError_t CUDARTAPI cudaGetDriverEntryPointByVersion(const char *symbol,
                                              void **funcPtr,
                                              unsigned int cudaVersion,
                                              unsigned long long flags,
                                              int *driverStatus);
 
 /* --- fatbin registration (compiler ABI, called by CUDA C++ runtime) --- */
-void **__cudaRegisterFatBinary(void *fatCubin);
-void __cudaRegisterFatBinaryEnd(void **fatCubinHandle);
-void __cudaRegisterFunction(void **fatCubinHandle, const char *hostFun,
+void ** CUDARTAPI __cudaRegisterFatBinary(void *fatCubin);
+void CUDARTAPI __cudaRegisterFatBinaryEnd(void **fatCubinHandle);
+void CUDARTAPI __cudaRegisterFunction(void **fatCubinHandle, const char *hostFun,
                             char *deviceFun, const char *deviceName,
                             int thread_limit, void *tid, void *bid,
                             void *bDim, void *gDim, int *wSize);
-void __cudaRegisterVar(void **fatCubinHandle, char *hostVar,
+void CUDARTAPI __cudaRegisterVar(void **fatCubinHandle, char *hostVar,
                        char *deviceAddress, const char *deviceName, int ext,
                        size_t size, int constant, int global);
-void __cudaUnregisterFatBinary(void **fatCubinHandle);
+void CUDARTAPI __cudaUnregisterFatBinary(void **fatCubinHandle);
 
 /* --- extended surface required by torch (peer, streams, symbols) --- */
-cudaError_t cudaDeviceCanAccessPeer(int *canAccessPeer, int device,
+cudaError_t CUDARTAPI cudaDeviceCanAccessPeer(int *canAccessPeer, int device,
                                     int peerDevice);
-cudaError_t cudaDeviceEnablePeerAccess(int peerDevice, unsigned int flags);
-cudaError_t cudaDeviceGetStreamPriorityRange(int *leastPriority,
+cudaError_t CUDARTAPI cudaDeviceEnablePeerAccess(int peerDevice, unsigned int flags);
+cudaError_t CUDARTAPI cudaDeviceGetStreamPriorityRange(int *leastPriority,
                                              int *greatestPriority);
-cudaError_t cudaStreamCreateWithPriority(cudaStream_t *pStream,
+cudaError_t CUDARTAPI cudaStreamCreateWithPriority(cudaStream_t *pStream,
                                          unsigned int flags, int priority);
-cudaError_t cudaStreamGetPriority(cudaStream_t hStream, int *priority);
-cudaError_t cudaStreamGetFlags(cudaStream_t hStream, unsigned int *flags);
-cudaError_t cudaStreamAddCallback(cudaStream_t stream,
+cudaError_t CUDARTAPI cudaStreamGetPriority(cudaStream_t hStream, int *priority);
+cudaError_t CUDARTAPI cudaStreamGetFlags(cudaStream_t hStream, unsigned int *flags);
+cudaError_t CUDARTAPI cudaStreamAddCallback(cudaStream_t stream,
                                   cudaStreamCallback_t callback,
                                   void *userData, unsigned int flags);
-cudaError_t cudaStreamIsCapturing(cudaStream_t stream, int *pCaptureStatus);
-cudaError_t cudaStreamGetCaptureInfo_v2(cudaStream_t stream,
+cudaError_t CUDARTAPI cudaStreamIsCapturing(cudaStream_t stream, int *pCaptureStatus);
+cudaError_t CUDARTAPI cudaStreamGetCaptureInfo_v2(cudaStream_t stream,
                                         int *captureStatus_out,
                                         unsigned long long *id_out);
-cudaError_t cudaMemcpyPeerAsync(void *dst, int dstDevice, const void *src,
+cudaError_t CUDARTAPI cudaMemcpyPeerAsync(void *dst, int dstDevice, const void *src,
                                 int srcDevice, size_t count,
                                 cudaStream_t stream);
-cudaError_t cudaMemcpyToSymbol(const void *symbol, const void *src,
+cudaError_t CUDARTAPI cudaMemcpyToSymbol(const void *symbol, const void *src,
                                size_t count, size_t offset, int kind);
-cudaError_t cudaMemcpyFromSymbol(void *dst, const void *symbol,
+cudaError_t CUDARTAPI cudaMemcpyFromSymbol(void *dst, const void *symbol,
                                  size_t count, size_t offset, int kind);
-cudaError_t cudaGetSymbolAddress(void **devPtr, const void *symbol);
-cudaError_t cudaGetSymbolSize(size_t *size, const void *symbol);
-cudaError_t cudaHostRegister(void *ptr, size_t size, unsigned int flags);
-cudaError_t cudaHostUnregister(void *ptr);
+cudaError_t CUDARTAPI cudaGetSymbolAddress(void **devPtr, const void *symbol);
+cudaError_t CUDARTAPI cudaGetSymbolSize(size_t *size, const void *symbol);
+cudaError_t CUDARTAPI cudaHostRegister(void *ptr, size_t size, unsigned int flags);
+cudaError_t CUDARTAPI cudaHostUnregister(void *ptr);
 
 #ifdef __cplusplus
 }

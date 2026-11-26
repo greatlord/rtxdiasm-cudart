@@ -71,3 +71,27 @@ normalized or unnormalized sampling.
   `Destroy`/`GetResourceDesc`.
 - `cudaDeviceReset`: no-op success.
 - Occupancy/`numRegs` are documented estimates.
+
+## Calling convention (32-bit Windows)
+
+NVIDIA's `cudart32_*.dll` exports the runtime API with the `__stdcall` calling
+convention (`CUDARTAPI` in the CUDA headers), so the callee pops the
+arguments. Callers are compiled against NVIDIA's headers and depend on it;
+it is part of the ABI, not an implementation detail.
+
+- `include/acuda/runtime_api.h` declares every entry point with `CUDARTAPI`
+  (`__stdcall` on `_M_IX86`, empty on other targets).
+- The Win32 target is compiled with `/Gz` so the definitions in `src/*.c`
+  match the header without annotating each definition separately.
+- Helper libraries called by the shim (`rtxdiasm_fatbin_*`,
+  `acuda_rtxdisam_cubin_to_ptx_for_target`) are pinned to `__cdecl`, since
+  they are built without `/Gz`.
+- Exported names stay undecorated: `WINDOWS_EXPORT_ALL_SYMBOLS` generates a
+  `.def` that aliases the decorated symbols (`cudaMalloc = _cudaMalloc@8`).
+
+A cdecl export silently corrupts the caller: after every call the caller's
+stack is left off by the argument bytes because neither side pops them. With
+PhysX 2.8.4 this appeared as `LoadLibrary("PhysXCore.dll")` failing with
+`ERROR_DLL_INIT_FAILED` (1114) and an access violation at `eip=00000002`
+inside a static initializer - a `ret` eventually jumped through a shifted
+stack. Matching the convention fixed GPU detection and simulation.

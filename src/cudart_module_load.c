@@ -1,7 +1,14 @@
 #include "cudart_internal.h"
 
-/* Provided by ACuda driver bridge (linked via acuda_driver/libcuda). */
-char *acuda_rtxdisam_cubin_to_ptx_for_target(
+/* Provided by ACuda driver bridge (linked via acuda_driver/libcuda).
+ * cdecl: the rest of this target is compiled with /Gz (stdcall) on x86 to
+ * match the CUDA ABI, but the driver side uses the default convention. */
+#if defined(_MSC_VER) && defined(_M_IX86)
+#define ACUDA_BRIDGE_CALL __cdecl
+#else
+#define ACUDA_BRIDGE_CALL
+#endif
+char *ACUDA_BRIDGE_CALL acuda_rtxdisam_cubin_to_ptx_for_target(
     const unsigned char *data, size_t size, const char *entry,
     const char *target, char *err, size_t errlen);
 

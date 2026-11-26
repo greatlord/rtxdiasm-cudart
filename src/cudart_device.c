@@ -17,6 +17,8 @@ cudaError_t cudaGetDeviceCount(int *count) {
         return r;
     }
     *count = n;
+    if (getenv("ACUDA_TRACE"))
+        fprintf(stderr, "ACuda-cudart: cudaGetDeviceCount=%d\n", n);
     return cudaSuccess;
 }
 
@@ -206,6 +208,11 @@ cudaError_t cudaGetDeviceProperties(struct cudaDeviceProp *prop, int device) {
     old.computePreemptionSupported = cur.computePreemptionSupported;
     old.canUseHostPointerForRegisteredMem =
         cur.canUseHostPointerForRegisteredMem;
+    if (getenv("ACUDA_TRACE"))
+        fprintf(stderr, "ACuda-cudart: cudaGetDeviceProperties dev=%d major=%d minor=%d mpc=%d maxThreads=%d smem=%zu mem=%zu\n",
+                device, old.major, old.minor, old.multiProcessorCount,
+                old.maxThreadsPerBlock, (size_t)old.sharedMemPerBlock,
+                (size_t)old.totalGlobalMem);
     memcpy(prop, &old, sizeof(old));
     return cudaSuccess;
 }
@@ -223,6 +230,8 @@ cudaError_t cudaSetDevice(int device) {
     if (cuDevicePrimaryCtxRetain(&ctx, device) != CUDA_SUCCESS)
         return cudaErrorInvalidDevice;
     g_device = device;
+    if (getenv("ACUDA_TRACE"))
+        fprintf(stderr, "ACuda-cudart: cudaSetDevice(%d) ok\n", device);
     return cudaSuccess;
 }
 
@@ -233,23 +242,51 @@ cudaError_t cudaGetDevice(int *device) {
     if (r != cudaSuccess)
         return r;
     *device = g_device;
+    if (getenv("ACUDA_TRACE"))
+        fprintf(stderr, "ACuda-cudart: cudaGetDevice=%d\n", g_device);
     return cudaSuccess;
 }
 
+/* Compatibility override for legacy applications that validate the CUDA
+ * version they were built against.  ACUDA_CUDART_LEGACY_VERSION (e.g. 6050
+ * for CUDA 6.5, the version PhysX 2.8.4 expects from cudart32_65.dll) makes
+ * both version queries report that value.  Unset means the real runtime
+ * version. */
+static int cudart_legacy_version(void) {
+    const char *s = getenv("ACUDA_CUDART_LEGACY_VERSION");
+    int v;
+    if (!s || !*s)
+        return 0;
+    v = atoi(s);
+    return v > 0 ? v : 0;
+}
+
 cudaError_t cudaDriverGetVersion(int *driverVersion) {
+    int legacy;
     if (!driverVersion)
         return cudaErrorInvalidValue;
-    int v = 0;
-    if (cuDriverGetVersion(&v) != CUDA_SUCCESS)
-        return cudaErrorInitializationError;
-    *driverVersion = v;
+    legacy = cudart_legacy_version();
+    if (legacy) {
+        *driverVersion = legacy;
+        return cudaSuccess;
+    }
+    {
+        int v = 0;
+        if (cuDriverGetVersion(&v) != CUDA_SUCCESS)
+            return cudaErrorInitializationError;
+        *driverVersion = v;
+    }
     return cudaSuccess;
 }
 
 cudaError_t cudaRuntimeGetVersion(int *runtimeVersion) {
+    int legacy;
     if (!runtimeVersion)
         return cudaErrorInvalidValue;
-    *runtimeVersion = ACUDA_RT_VERSION;
+    legacy = cudart_legacy_version();
+    *runtimeVersion = legacy ? legacy : ACUDA_RT_VERSION;
+    if (getenv("ACUDA_TRACE"))
+        fprintf(stderr, "ACuda-cudart: cudaRuntimeGetVersion=%d\n", *runtimeVersion);
     return cudaSuccess;
 }
 
