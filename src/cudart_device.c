@@ -94,11 +94,10 @@ typedef struct {
     int concurrentManagedAccess;
     int computePreemptionSupported;
     int canUseHostPointerForRegisteredMem;
-    int reserved[64];
 } acuda_legacy_device_prop_t;
 
 typedef char acuda_legacy_device_prop_size_check[
-    (sizeof(acuda_legacy_device_prop_t) == 848) ? 1 : -1];
+    (sizeof(acuda_legacy_device_prop_t) == 592) ? 1 : -1];
 
 cudaError_t cudaGetDeviceProperties(struct cudaDeviceProp *prop, int device) {
     if (!prop)
