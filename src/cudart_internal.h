@@ -36,6 +36,12 @@ extern cudaError_t g_last;
 
 void set_last(cudaError_t e);
 cudaError_t map_cu(CUresult r);
+
+/* Asynchronous constant-memory upload (used by cudaMemcpyToSymbolAsync).
+ * Implemented in cudart_texture.c next to the symbol resolver. */
+cudaError_t cudart_memcpy_to_symbol_async(const void *symbol, const void *src,
+                                          size_t count, size_t offset, int kind,
+                                          cudaStream_t stream);
 cudaError_t ensure_init(void);
 cudaError_t check_ctx(void);
 static inline CUstream map_stream(cudaStream_t s) {
@@ -68,6 +74,12 @@ typedef struct {
     size_t nfuncs;
     fat_var_t *vars;
     size_t nvars;
+    struct {
+        const void *hostVar;
+        char deviceName[256];
+        int normalized;
+    } *texs;
+    size_t ntexs;
     void *orig_blob;
     size_t orig_blob_len;
     int sass_only;
@@ -79,6 +91,8 @@ extern size_t g_fatcap;
 
 int find_func(const void *func, const char **deviceName, const char **ptx);
 int find_var(const void *hostVar, const char **deviceName, size_t *size, fatbin_t **out_fb);
+int find_tex(const void *hostVar, fatbin_t **out_fb, const char **name,
+             int *normalized);
 void fatbins_add(fatbin_t *fb);
 void fatbins_remove(fatbin_t *fb);
 size_t fatbin_add_ptx(fatbin_t *fb, char *ptx, size_t ptx_len);

@@ -121,11 +121,12 @@ cudaError_t cudaThreadSynchronize(void) {
 cudaError_t cudaMemcpyToSymbolAsync(const void *symbol, const void *src,
                                     size_t count, size_t offset,
                                     cudaMemcpyKind kind, cudaStream_t stream) {
-    /* The copy path is host-visible device memory, so an asynchronous
-     * transfer is already ordered by cuMemcpy; the stream only affects
-     * completion ordering, which cudaDeviceSynchronize covers. */
-    (void)stream;
-    return cudaMemcpyToSymbol(symbol, src, count, offset, (int)kind);
+    /* NVIDIA's runtime is asynchronous here; PhysX uploads its kernel
+     * parameters from a device buffer every frame.  Blocking in the driver
+     * (memcpy_d2d takes a stream synchronise) stalls the PhysX worker
+     * thread, so use the driver's asynchronous copy. */
+    return cudart_memcpy_to_symbol_async(symbol, src, count, offset, (int)kind,
+                                         stream);
 }
 
 cudaError_t cudaDeviceSetCacheConfig(int cacheConfig) {
@@ -134,18 +135,86 @@ cudaError_t cudaDeviceSetCacheConfig(int cacheConfig) {
     return cudaSuccess;
 }
 
+static CUarray_format legacy_cu_format(const cudaChannelFormatDesc *d,
+                                       unsigned *nch) {
+    int bits = d->x;
+    *nch = (d->x ? 1u : 0u) + (d->y ? 1u : 0u) + (d->z ? 1u : 0u) +
+           (d->w ? 1u : 0u);
+    switch (d->f) {
+    case cudaChannelFormatKindSigned:
+        return bits == 8 ? CU_AD_FORMAT_SIGNED_INT8
+                         : bits == 16 ? CU_AD_FORMAT_SIGNED_INT16
+                                      : CU_AD_FORMAT_SIGNED_INT32;
+    case cudaChannelFormatKindFloat:
+        return bits == 16 ? CU_AD_FORMAT_HALF : CU_AD_FORMAT_FLOAT;
+    case cudaChannelFormatKindUnsigned:
+    default:
+        return bits == 8 ? CU_AD_FORMAT_UNSIGNED_INT8
+                         : bits == 16 ? CU_AD_FORMAT_UNSIGNED_INT16
+                                      : CU_AD_FORMAT_UNSIGNED_INT32;
+    }
+}
+
 cudaError_t cudaBindTexture(size_t *offset, const void *texref,
                             const void *devPtr,
                             const cudaChannelFormatDesc *desc, size_t size) {
-    /* ACuda binds textures through the driver texref API (cuTexRefSetAddress),
-     * which PhysX calls directly.  Accept the legacy runtime bind so the
-     * module loads; there is no image to create here. */
-    (void)texref;
-    (void)devPtr;
-    (void)desc;
-    (void)size;
+    /* Bind the module's driver texref.  The launch path looks the texref up
+     * by name and needs a bound texture object (CUDA_ERROR_INVALID_HANDLE
+     * otherwise), so this cannot be a no-op. */
+    cudaError_t r = check_ctx();
+    if (r != cudaSuccess) {
+        set_last(r);
+        return r;
+    }
+    fatbin_t *fb = NULL;
+    const char *name = NULL;
+    int normalized = 0;
+    if (!find_tex(texref, &fb, &name, &normalized) || !name || !fb) {
+        if (getenv("ACUDA_TRACE"))
+            fprintf(stderr, "ACuda-cudart: cudaBindTexture(%p) NOT REGISTERED\n",
+                    texref);
+        set_last(cudaErrorInvalidValue);
+        return cudaErrorInvalidValue;
+    }
+    CUmodule mod = NULL;
+    CUresult cr = module_for_fatbin(fb, &mod);
+    if (cr != CUDA_SUCCESS) {
+        set_last(map_cu(cr));
+        return map_cu(cr);
+    }
+    CUtexref tr = NULL;
+    cr = cuModuleGetTexRef(&tr, mod, name);
+    if (cr != CUDA_SUCCESS) {
+        if (getenv("ACUDA_TRACE"))
+            fprintf(stderr,
+                    "ACuda-cudart: cudaBindTexture(%s) cuModuleGetTexRef -> %d\n",
+                    name, (int)cr);
+        set_last(map_cu(cr));
+        return map_cu(cr);
+    }
+    if (desc) {
+        unsigned nch = 0;
+        CUarray_format fmt = legacy_cu_format(desc, &nch);
+        cr = cuTexRefSetFormat(tr, fmt, (int)nch);
+        if (cr != CUDA_SUCCESS) {
+            set_last(map_cu(cr));
+            return map_cu(cr);
+        }
+    }
+    if (normalized)
+        (void)cuTexRefSetFlags(tr, 0x01 /* CU_TRSF_NORMALIZED_COORDINATES */);
+    size_t off = 0;
+    cr = cuTexRefSetAddress_v2(&off, tr, (CUdeviceptr)(uintptr_t)devPtr, size);
+    if (getenv("ACUDA_TRACE"))
+        fprintf(stderr,
+                "ACuda-cudart: cudaBindTexture(%s) ptr=%p size=%zu -> off=%zu st=%d\n",
+                name, devPtr, size, off, (int)cr);
+    if (cr != CUDA_SUCCESS) {
+        set_last(map_cu(cr));
+        return map_cu(cr);
+    }
     if (offset)
-        *offset = 0;
+        *offset = off;
     set_last(cudaSuccess);
     return cudaSuccess;
 }
@@ -154,16 +223,4 @@ cudaError_t cudaUnbindTexture(const void *texref) {
     (void)texref;
     set_last(cudaSuccess);
     return cudaSuccess;
-}
-
-void __cudaRegisterTexture(void **fatCubinHandle, const void *hostVar,
-                           const void **deviceAddress, const char *deviceName,
-                           int dim, int norm, int ext) {
-    (void)fatCubinHandle;
-    (void)hostVar;
-    (void)deviceAddress;
-    (void)deviceName;
-    (void)dim;
-    (void)norm;
-    (void)ext;
 }

@@ -9,6 +9,14 @@
 #endif
 #endif
 extern CUresult ACUDA_CUDAAPI cuModuleGetGlobal_v2(CUdeviceptr *dptr, size_t *bytes, CUmodule hmod, const char *name);
+extern CUresult ACUDA_CUDAAPI cuMemcpyHtoDAsync_v2(CUdeviceptr dstDevice,
+                                                   const void *srcHost,
+                                                   size_t ByteCount,
+                                                   void *hStream);
+extern CUresult ACUDA_CUDAAPI cuMemcpyDtoDAsync_v2(CUdeviceptr dstDevice,
+                                                   CUdeviceptr srcDevice,
+                                                   size_t ByteCount,
+                                                   void *hStream);
 
 static int chan_count(const cudaChannelFormatDesc *d) {
     return (d->x ? 1 : 0) + (d->y ? 1 : 0) + (d->z ? 1 : 0) + (d->w ? 1 : 0);
@@ -624,6 +632,47 @@ cudaError_t cudaMemcpyToSymbol(const void *symbol, const void *src,
     case cudaMemcpyDeviceToDevice:
         r = map_cu(cuMemcpyDtoD_v2(dptr + (CUdeviceptr)offset,
                                    (CUdeviceptr)(uintptr_t)src, count));
+        break;
+    default:
+        r = cudaErrorInvalidValue;
+        break;
+    }
+    set_last(r);
+    return r;
+}
+
+cudaError_t cudart_memcpy_to_symbol_async(const void *symbol, const void *src,
+                                          size_t count, size_t offset, int kind,
+                                          cudaStream_t stream) {
+    cudaError_t r = check_ctx();
+    if (r != cudaSuccess)
+        return r;
+    if (!symbol)
+        return cudaErrorInvalidValue;
+    CUdeviceptr dptr = 0;
+    size_t sym_size = 0;
+    r = cudart_resolve_symbol(symbol, &dptr, &sym_size);
+    if (getenv("ACUDA_TRACE") || getenv("ACUDA_DEBUG_SYMBOLS"))
+        fprintf(stderr, "ACuda-cudart: cudaMemcpyToSymbolAsync host=%p -> dp=0x%llx sym_size=%zu count=%zu off=%zu kind=%d resolve=%d\n",
+                symbol, (unsigned long long)dptr, sym_size, count, offset, kind, (int)r);
+    if (r != cudaSuccess)
+        return r;
+    if (count == 0)
+        count = sym_size > offset ? sym_size - offset : 0;
+    if (offset + count > sym_size)
+        return cudaErrorInvalidValue;
+    if (count == 0)
+        return cudaSuccess;
+    switch ((cudaMemcpyKind)kind) {
+    case cudaMemcpyHostToDevice:
+    case cudaMemcpyDefault:
+        r = map_cu(cuMemcpyHtoDAsync_v2(dptr + (CUdeviceptr)offset, src, count,
+                                        (void *)stream));
+        break;
+    case cudaMemcpyDeviceToDevice:
+        r = map_cu(cuMemcpyDtoDAsync_v2(dptr + (CUdeviceptr)offset,
+                                        (CUdeviceptr)(uintptr_t)src, count,
+                                        (void *)stream));
         break;
     default:
         r = cudaErrorInvalidValue;

@@ -95,3 +95,25 @@ PhysX 2.8.4 this appeared as `LoadLibrary("PhysXCore.dll")` failing with
 `ERROR_DLL_INIT_FAILED` (1114) and an access violation at `eip=00000002`
 inside a static initializer - a `ret` eventually jumped through a shifted
 stack. Matching the convention fixed GPU detection and simulation.
+
+## Fatbin ownership and context model
+
+Two design rules keep PhysX 2.8.4 stable with this shim:
+
+- **One fatbin loader.** `__cudaRegisterFatBinary` stores the
+  `__fatBinC_Wrapper_t` and hands it to `cuModuleLoadData` unchanged. nvcuda
+  parses the wrapper, the `0xBA55ED50` container and the PTX/SASS member, so
+  there is exactly one implementation choosing the image. A second extractor
+  inside the runtime could pick a different member than the driver and
+  produced divergent (hanging) kernels.
+- **One context.** Every driver entry point, including the CUDA 13.x
+  interface shim in `driver_export_dd9e98a4.c`, uses the single shared context
+  created by `need_actx()`. Retaining a primary context on top of it created a
+  second context: launches were recorded on one stream timeline while
+  memcpy/synchronise waited on the other, deadlocking PhysX's worker thread.
+
+Legacy texture references are real bindings: `cudaBindTexture` resolves the
+module registered by `__cudaRegisterTexture` and calls
+`cuModuleGetTexRef`/`cuTexRefSetFormat`/`cuTexRefSetAddress`. The launch path
+resolves hidden texref parameters by name and fails with
+`CUDA_ERROR_INVALID_HANDLE` when no texture object is bound.
